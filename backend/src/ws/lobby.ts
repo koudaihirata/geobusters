@@ -1,4 +1,5 @@
 // src/ws/lobby.ts
+import { GeminiAPI } from '../gemini'
 import { nearBySearch } from '../NearBySearch'
 import type { Client } from '../types'
 
@@ -24,7 +25,10 @@ export async function handleLobbyMessage(
     ws: Client,
     name: string,
     clientId: string | undefined,
-    env: { GOOGLE_PLACES_API_KEY?: string },
+    env: { 
+        GOOGLE_PLACES_API_KEY?: string,
+        GEMINI_API_KEY?: string
+    },
     parsed: any,                 // 受信メッセージ（JSON）
     promoteToGame: () => void    // フェーズ切替コールバック
 ) {
@@ -51,7 +55,7 @@ export async function handleLobbyMessage(
         }
         const apiKey = env.GOOGLE_PLACES_API_KEY
         if (!apiKey) {
-            deps.send(ws, { type: 'error', text: 'APIキーが設定されていません' })
+            deps.send(ws, { type: 'error', text: '位置情報用のAPIキーが設定されていません' })
             return
         }
         const results = await nearBySearch(latitude, longitude, apiKey)
@@ -59,12 +63,25 @@ export async function handleLobbyMessage(
 
         const members = deps.getMembers()
         if (results.length > 0) {
-            members.forEach(player => {
+            const geminiApiKey = env.GEMINI_API_KEY
+            if (!geminiApiKey) {
+                deps.send(ws, { type: 'error', text: 'GeminiのAPIキーが設定されていません' })
+                return
+            }
+            for (const player of members) {
                 const idx = Math.floor(Math.random() * results.length)
                 const pick = results[idx]
-                if (!pick) return
-                deps.sendTo(player, { type: 'spot_choice', spot: pick.name, index: idx })
-            })
+                if (!pick) continue
+                // 1人ずつ別のカードを生成
+                const geminiCard = await GeminiAPI(geminiApiKey, pick.name)
+                deps.sendTo(player, {
+                    type: 'ai_card',
+                    spot: geminiCard.spotName,
+                    card_name: geminiCard.name,
+                    card_effect: geminiCard.effect,
+                    card_img: geminiCard.imageBase64 ?? 'not null'
+                })
+            }
         }
 
         // フロントにフェーズ変更を通知

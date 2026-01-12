@@ -22,7 +22,8 @@ type WsMsg =
   | { type: 'game_started'; players: string[]; hp: Record<string, number>; round: number; turn: string; deckVer?: number }
   | { type: 'state'; hp: Record<string, number>; round: number; turn: string }
   | { type: 'played'; by: string; cardId: number; target?: string; delta: { hp: Record<string, number> }; next?: { round: number; turn: string } }
-  | { type: 'game_over'; winner: string };
+  | { type: 'game_over'; winner: string } 
+  | { type: 'ai_card'; spot: string; card_name: string; card_effect: string; card_img: string}
 
 export default function Rooms() {
   const location = useLocation()
@@ -141,6 +142,9 @@ export default function Rooms() {
             case 'members':
               dispatch(setMembers(msg.members, msg.hostClientId))
               dispatch(appendLog(`👥 members: ${msg.members.join(', ')}`))
+              break
+            case 'ai_card':
+              dispatch(appendLog(`🃏 AICard. 場所:${msg.spot} カード名:${msg.card_name} 効果説明:${msg.card_effect} カード画像:${msg.card_img}`))
               break
             case 'game_started':
               navigate(`/game?room=${encodeURIComponent(state.roomId)}&name=${encodeURIComponent(state.name)}`)

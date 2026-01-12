@@ -2,20 +2,26 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { baseURL } from '../../utils/baseURL'
 import styles from './styles.module.css'
-import { CARD_LIBRARY, type CardCategory } from '../../utils/cards'
+import { CARD_LIBRARY, type CardCategory, type CardMeta } from '../../utils/cards'
 import NormalBtn from '../../components/button/NormalBtn'
 
+// ====== 型定義 ======
 type S = {
     players: string[]
     hp: Record<string, number>
     round: number
     turn: string
 }
+// 初期状態
 const initS: S = { players:[], hp:{}, round:1, turn:'' }
+// HP の上限
 const MAX_HP = 10
+// clientId 保管キー
 const CLIENT_ID_STORAGE_KEY = 'rooms:clientId'
+// プレイログ表示用の共有状態
 type SharedPlayView = { attacker?: string | null; attackCardId?: number | null; target?: string | null; defenseCardId?: number | null }
 
+// ====== WS メッセージ型 ======
 type DefenseSnapshot = { attacker: string; target: string; damage: number; cardId?: number; defenseCardId?: number }
 type GameStartedMsg = { type: 'game_started'; players?: string[]; hp?: Record<string, number>; round?: number; turn?: string }
 type StateMsg = { type: 'state'; hp?: Record<string, number>; round?: number; turn?: string; phase?: 'action' | 'defense'; defense?: DefenseSnapshot }
@@ -26,8 +32,10 @@ type DefenseRequestedMsg = { type: 'defense_requested'; attacker: string; target
 type HandUpdateMsg = { type: 'hand_update'; hand: number[] }
 type GameWsMsg = GameStartedMsg | StateMsg | PlayedMsg | GameOverMsg | PhaseChangedMsg | DefenseRequestedMsg | HandUpdateMsg
 
+// デッキ外のスポットカードID
 const SPOT_CARD_ID = 9999
 
+// WS で受け取るメッセージの簡易ガード
 const isGameWsMsg = (msg: unknown): msg is GameWsMsg => {
     if (!msg || typeof msg !== 'object') return false
     const type = (msg as { type?: unknown }).type
@@ -40,6 +48,7 @@ const isGameWsMsg = (msg: unknown): msg is GameWsMsg => {
         || type === 'hand_update'
 }
 
+// プレイヤー配列の重複を除外しつつ順序を維持
 const mergePlayers = (current: string[], incoming: string[]) => {
     const ordered = current.length ? [...current] : []
     incoming.forEach(player => {
@@ -48,6 +57,7 @@ const mergePlayers = (current: string[], incoming: string[]) => {
     return ordered.length ? ordered : incoming
 }
 
+// clientId を復元/生成
 const resolveClientId = () => {
     const fallback = () => `anon-${Date.now()}-${Math.random().toString(16).slice(2)}`
     try {
@@ -64,38 +74,47 @@ const resolveClientId = () => {
 }
 
 export default function Game() {
+    // ====== ルーター / WS / 状態 ======
     const [sp] = useSearchParams()
     const navigate = useNavigate()
+    // 画面クエリ
     const room = sp.get('room') ?? ''
     const name = sp.get('name') ?? ''
+    // WebSocket参照
     const wsRef = useRef<WebSocket|null>(null)
     const playersRef = useRef<string[]>(initS.players)
+    // ゲーム状態
     const [st, setSt] = useState<S>(initS)
     const [hand, setHand] = useState<number[]>([])
     const [phase, setPhase] = useState<'action' | 'defense'>('action')
     const [selectedCardIndex, setSelectedCardIndex] = useState<number|null>(null)
     const [defensePrompt, setDefensePrompt] = useState<DefenseSnapshot | null>(null)
     const [spotCardName, setSpotCardName] = useState<string>('近くのスポットカード')
+    // ターン/ターゲット関連
     const isMyTurn = st.turn === name
     const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
     const clientIdRef = useRef<string>(resolveClientId())
     const isDefenseTurn = phase === 'defense' && defensePrompt?.target === name
     const canPlayAttackCard = phase === 'action' && isMyTurn
     const canSelectTarget = phase === 'action'
+    // プレイログの表示用
     const [playView, setPlayView] = useState<SharedPlayView>({ attacker: null, attackCardId: null, target: null, defenseCardId: null })
     // 手札引き直し関係
     // const allDefenseHand = hand.length === 3 && hand.every(cardId => CARD_LIBRARY[cardId]?.category === 'defense')
     // const canMulligan = canPlayAttackCard && allDefenseHand
 
+    // ====== 参照同期 ======
     useEffect(() => {
         playersRef.current = st.players
     }, [st.players])
 
+    // ====== WS 接続 / 受信 ======
     useEffect(() => {
         const ws = new WebSocket(`${baseURL}?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&cid=${encodeURIComponent(clientIdRef.current)}`)
         wsRef.current = ws
         let navigated = false
 
+        // ルームへ戻る遷移
         const returnToRooms = () => {
             if (navigated) return
             navigated = true
@@ -266,6 +285,7 @@ export default function Game() {
         }
     }, [room, name, navigate])
 
+    // ====== ターン状態に応じたクリア処理 ======
     useEffect(() => {
         if (!canPlayAttackCard) {
             setSelectedTarget(null)
@@ -273,9 +293,11 @@ export default function Game() {
         }
     }, [canPlayAttackCard])
 
+    // ====== カード判定 ======
     const requiresTarget = (cardId: number) => CARD_LIBRARY[cardId]?.requiresTarget ?? false
     const isDefenseCard = (cardId: number) => CARD_LIBRARY[cardId]?.category === 'defense'
 
+    // ====== カード実行 ======
     const play = (cardId: number) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
         if (phase === 'defense') {
@@ -287,7 +309,7 @@ export default function Game() {
         }
         const payload: { type: 'play'; cardId: number; target?: string } = { type: 'play', cardId }
         if (phase === 'action' && requiresTarget(cardId)) {
-            const meta = CARD_LIBRARY[cardId]
+            const meta: CardMeta = CARD_LIBRARY[cardId]
             let targetChoice = selectedTarget
             if (!targetChoice) {
                 if (meta?.category === 'heal') {
@@ -304,6 +326,7 @@ export default function Game() {
         wsRef.current.send(JSON.stringify(payload))
     }
 
+    // ====== 行動決定 ======
     const commitAction = () => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
         const selectedCardId = selectedCardIndex !== null ? hand[selectedCardIndex] : null
@@ -354,6 +377,7 @@ export default function Game() {
     //     wsRef.current.send(JSON.stringify({ type:'mulligan' }))
     // }
 
+    // ====== HP 表示 ======
     const hpPercent = (player: string) => {
         const value = st.hp[player] ?? 0
         return Math.max(0, Math.min(100, (value / MAX_HP) * 100))
@@ -366,6 +390,7 @@ export default function Game() {
         return styles.hpFull
     }
 
+    // ====== プレイヤー並び ======
     const playersToDisplay = (() => {
         const ordered = st.players.length ? [...st.players] : [...Object.keys(st.hp)]
         const idx = ordered.indexOf(name)
@@ -376,14 +401,16 @@ export default function Game() {
         return ordered
     })()
     const defenseTarget = defensePrompt?.target
-    const resolveCardMetaById = (cardId: number | null | undefined) => {
+    // カードIDから表示用メタを解決
+    const resolveCardMetaById = (cardId: number | null | undefined): CardMeta | undefined => {
         if (cardId === null || cardId === undefined) return undefined
         if (cardId === SPOT_CARD_ID) {
             return {
                 id: SPOT_CARD_ID,
                 label: spotCardName,
                 detail: 'デッキとは別にAIが生成した特別カード',
-                category: 'attack' as const
+                category: 'attack' as const,
+                img: ''
             }
         }
         return CARD_LIBRARY[cardId]
@@ -392,6 +419,7 @@ export default function Game() {
     const selectedCardId = selectedCardIndex !== null ? hand[selectedCardIndex] : null
     const selectedCardMeta = resolveCardMetaById(selectedCardId)
 
+    // ====== ターゲットの既定選択 ======
     const defaultAttackTarget = (current: string) => {
         const order = st.players.length ? st.players : Object.keys(st.hp)
         const idx = order.indexOf(current)
@@ -405,6 +433,7 @@ export default function Game() {
         return null
     }
 
+    // ====== プレイログ表示用のカード/名前 ======
     const attackCardIdForDisplay = (() => {
         if (phase === 'defense' && defensePrompt) {
             return defensePrompt.cardId ?? playView.attackCardId
@@ -460,6 +489,7 @@ export default function Game() {
     //     turnInfoMessage = `${st.turn || '---'} のターンです。`
     // }
 
+    // ====== カードカテゴリごとのクラス ======
     const categoryClass: Record<CardCategory, string> = {
         attack: styles.attack,
         defense: styles.defense,
@@ -467,6 +497,7 @@ export default function Game() {
         special: styles.special
     }
 
+    // ====== プレイログのカード表示 ======
     const CardSlot = ({
         card,
         isSelf
@@ -480,7 +511,7 @@ export default function Game() {
                 {showCard ? (
                     <div className={`${styles.selectedCardBar} ${categoryClass[card.category] ?? ''}`}>
                         <div className={styles.cardImg}>
-                            <img src={`Group.svg`} />
+                            <img src={`${card.img}.svg`} />
                         </div>
                         <div className={styles.cardWrap}>
                             <p className={styles.selectedCardName}><span className={styles.selectedCardNameLabel}>{card.label}</span></p>
@@ -611,12 +642,13 @@ export default function Game() {
                     <div className={styles.handCards}>
                         {hand.length === 0 && <span className={styles.emptyHand}>カードなし</span>}
                         {hand.map((cardId, idx) => {
-                            const meta = cardId === SPOT_CARD_ID
+                            const meta: CardMeta = cardId === SPOT_CARD_ID
                                 ? {
                                     id: SPOT_CARD_ID,
                                     label: spotCardName,
                                     detail: 'AI生成のスペシャルカード（デッキ外）',
-                                    category: 'special' as const
+                                    category: 'special' as const,
+                                    img: ''
                                 }
                                 : CARD_LIBRARY[cardId]
                             if (!meta) return null
@@ -637,7 +669,7 @@ export default function Game() {
                                     }}
                                 >
                                     <div className={styles.cardImg}>
-                                        <img src={`Group.svg`} />
+                                        <img src={`${meta.img}.svg`} />
                                     </div>
                                     <div className={styles.cardWrap}>
                                         <p className={`${styles.selectedCardName} ${styles.cardName}`}><span>{meta.label}</span></p>
