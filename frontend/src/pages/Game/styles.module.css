@@ -124,19 +124,21 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  
+  color: var(--textColor);
+}
 
-  > span {
-    color: black;
-    font-size: 12px;
-  }
-  
-  .selectedCardNameLabel {
-    font-size: 20px;
-    /* -webkit-text-fill-color: white;
-    -webkit-text-stroke: .8px black; */
-    color: var(--textColor);
-  }
+.selectedCardNameLabel {
+  font-size: 20px;
+  /* -webkit-text-fill-color: white;
+  -webkit-text-stroke: .8px black; */
+}
+
+.selectedCardNameLabelNormal {
+  font-size: 12px;
+}
+
+.selectedCardNameLabelSmall {
+  font-size: 8px;
 }
 
 .selectedCardDetail {
@@ -343,6 +345,7 @@
 
 .cardToken {
   height: 100%;
+  max-width: 100px;
   aspect-ratio: 125 / 202;
   border-radius: 10px;
   display: flex;

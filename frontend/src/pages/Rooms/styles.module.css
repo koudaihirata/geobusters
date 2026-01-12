@@ -118,6 +118,28 @@
     color: #555;
 }
 
+.loadingOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.loadingCard {
+    background: #fff;
+    padding: 20px 28px;
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+    text-align: center;
+}
+
+.loadingCard > p {
+    margin: 0;
+    line-height: 1.6;
+}
 /* @media screen and (min-width: 768px) {
     .roomSection {
         height: 58%;

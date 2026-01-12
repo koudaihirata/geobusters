@@ -9,6 +9,7 @@ export type WsAction =
   | { type: 'JOINED'; roomId: string }
   | { type: 'APPEND_LOG'; line: string }
   | { type: 'SET_INPUT'; input: string }
+  | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_MEMBERS'; members: string[]; hostId?: string | null }
 
 export const setRoom = (roomId: string): WsAction => ({ type: 'SET_ROOM', roomId });
@@ -19,4 +20,5 @@ export const disconnected = (): WsAction => ({ type: 'DISCONNECTED' });
 export const joined = (roomId: string): WsAction => ({ type: 'JOINED', roomId });
 export const appendLog = (line: string): WsAction => ({ type: 'APPEND_LOG', line });
 export const setInput = (input: string): WsAction => ({ type: 'SET_INPUT', input });
+export const setLoading = (loading: boolean): WsAction => ({ type: 'SET_LOADING', loading });
 export const setMembers = (members: string[], hostId?: string | null): WsAction => ({ type: 'SET_MEMBERS', members, hostId })

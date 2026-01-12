@@ -10,7 +10,8 @@ export type State = {
     input: string,
     logs: string[],
     members: string[],
-    hostId: string | null
+    hostId: string | null,
+    loading: boolean
 }
 
 export const defaultState: State = {
@@ -21,7 +22,8 @@ export const defaultState: State = {
     input: '',
     logs: [],
     members: [],
-    hostId: null
+    hostId: null,
+    loading: false
 }
 
 export function Reducer(state: State, action: WsAction): State {
@@ -52,7 +54,8 @@ export function Reducer(state: State, action: WsAction): State {
             return {
                 ...state,
                 connected: false,
-                joined: false
+                joined: false,
+                loading: false
             }
         case 'JOINED':
             return {
@@ -64,6 +67,11 @@ export function Reducer(state: State, action: WsAction): State {
             return {
                 ...state,
                 input: action.input
+            }
+        case 'SET_LOADING':
+            return {
+                ...state,
+                loading: action.loading
             }
         case 'APPEND_LOG':
             return {

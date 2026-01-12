@@ -672,7 +672,7 @@ export default function Game() {
                                         <img src={`${meta.img}.svg`} />
                                     </div>
                                     <div className={styles.cardWrap}>
-                                        <p className={`${styles.selectedCardName} ${styles.cardName}`}><span>{meta.label}</span></p>
+                                        <p className={`${styles.selectedCardName} ${styles.cardName}`}><span className={meta.label.length > 8 ? styles.selectedCardNameLabelSmall : styles.selectedCardNameLabelNormal}>{meta.label}</span></p>
                                         <p className={`${styles.selectedCardDetail} ${styles.cardDetail}`}>{meta.detail}</p>
                                     </div>
                                 </button>

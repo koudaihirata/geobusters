@@ -3,7 +3,7 @@
 import styles from './styles.module.css'
 import { useEffect, useReducer, useRef } from 'react'
 import { defaultState, Reducer } from './reducer';
-import { appendLog, connected, disconnected, joined, setMembers, setName, setRoom } from './action';
+import { appendLog, connected, disconnected, joined, setLoading, setMembers, setName, setRoom } from './action';
 import { baseURL } from '../../utils/baseURL';
 import NormalBtn from '../../components/button/NormalBtn';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -152,6 +152,7 @@ export default function Rooms() {
             case 'phase_changed':
               dispatch(appendLog(`🎮 phase: ${msg.phase}`))
               if (msg.phase === 'game') {
+                dispatch(setLoading(false))
                 navigate(`/game?room=${encodeURIComponent(state.roomId)}&name=${encodeURIComponent(state.name)}`)
               }
               break
@@ -160,6 +161,7 @@ export default function Rooms() {
               break
             case 'error':
               dispatch(appendLog(`❗ ${msg.text}`))
+              dispatch(setLoading(false))
               break
             case 'pong':
               dispatch(appendLog(`🩺 pong (${new Date(msg.at).toLocaleTimeString()})`))
@@ -310,6 +312,7 @@ export default function Rooms() {
                   return
                 }
                 if (state.members.length > 1) {
+                  dispatch(setLoading(true))
                   navigator.geolocation.getCurrentPosition((pos) => {
                     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
                     wsRef.current.send(JSON.stringify({
@@ -318,7 +321,10 @@ export default function Rooms() {
                       lat: pos.coords.latitude,
                       lng: pos.coords.longitude,
                     }))
-                  }, geoError, geoOptions)
+                  }, (err) => {
+                    geoError(err)
+                    dispatch(setLoading(false))
+                  }, geoOptions)
                 } else {
                   dispatch(appendLog(`❗ error: ゲームを始めるには2人以上が必要です`))
                 }
@@ -342,6 +348,14 @@ export default function Rooms() {
           </div>
         </div>
       }
+      {state.loading && (
+        <div className={styles.loadingOverlay}>
+          <div className={styles.loadingCard}>
+            <p>AIカードを生成中...</p>
+            <p>少しお待ちください</p>
+          </div>
+        </div>
+      )}
     </>
   )
 }
