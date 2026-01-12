@@ -566,7 +566,7 @@ export default function Game() {
                         </div>
                         <div className={styles.cardWrap}>
                             <p className={styles.selectedCardName}>
-                                <span className={card.label.length > 8 ? styles.selectedCardNameLabelSmall : styles.selectedCardNameLabel}>
+                                <span className={card.label.length > 8 ? styles.selectedCardNameLabelNormal : styles.selectedCardNameLabel}>
                                     {card.label}
                                 </span>
                             </p>

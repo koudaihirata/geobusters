@@ -87,7 +87,7 @@ export async function handleLobbyMessage(
                     type: 'ai_card',
                     spot: geminiCard.spotName,
                     card_effect: geminiCard.effect,
-                    card_img: geminiCard.imageBase64 ?? 'not null'
+                    card_img: geminiCard.imageBase64
                 })
             }
         }

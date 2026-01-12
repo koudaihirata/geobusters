@@ -54,29 +54,46 @@ export async function GeminiAPI(
     }
 
     // 2) 画像生成（Nanobanana）
-    // const imageRes = await fetch(imageApiUrl, {
-    //     method: 'POST',
-    //     headers: {
-    //         'Content-Type': 'application/json',
-    //     },
-    //     body: JSON.stringify({
-    //         prompt: `A trading card illustration of ${spotName}`,
-    //         size: '200x230'
-    //     })
-    // })
-    // if (!imageRes.ok) {
-    //     throw new Error(`Image API failed: ${imageRes.status}`)
-    // }
-    // const imageJson = await imageRes.json() as {
-    //     candidates?: Array<{
-    //         content?: {
-    //             parts?: Array<{ inline_data?: { data?: string } }>
-    //         }
-    //     }>
-    // }
-    // const part = imageJson.candidates?.[0]?.content?.parts?.[0]
-    // const imageBase64 = part?.inline_data?.data // base64
-    const imageBase64 = undefined
+    const imageRes = await fetch(imageApiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [{
+                    text: `
+                        A trading card illustration of ${spotName}.
+                        image size 200x230 pixels.
+                        no card border.
+                        no frame.
+                        full-bleed illustration.
+                    `
+                }]
+            }]
+        })
+    })
+    const imageBody = await imageRes.text()
+    if (!imageRes.ok) {
+        console.log(`[Image] status=${imageRes.status} body=${imageBody}`)
+        throw new Error(`Image API failed: ${imageRes.status}`)
+    }
+    let imageJson: {
+        candidates?: Array<{
+            content?: {
+                parts?: Array<{ inline_data?: { data?: string }, inlineData?: { data?: string } }>
+            }
+        }>
+    } = {}
+    try {
+        imageJson = JSON.parse(imageBody)
+    } catch (error) {
+        console.log(`[Image] JSON parse failed body=${imageBody}`)
+        throw error
+    }
+    const parts = imageJson.candidates?.[0]?.content?.parts ?? []
+    const imagePart = parts.find(part => part.inlineData?.data || part.inline_data?.data)
+    const imageBase64 = imagePart?.inlineData?.data ?? imagePart?.inline_data?.data
 
     return {
         spotName,
