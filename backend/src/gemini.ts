@@ -22,13 +22,14 @@ export async function GeminiAPI(
                 parts: [{
                     text:   `You are a card game designer.From the following spot name, create one card.\n` +
                             `Constraints:\n
-                                - Category must be one of "attack" | "defense" | "heal"\n
-                                - Value must be between 5 and 10\n
+                                - Category must be one of "attack" | "defense" | "heal".\n
+                                - Value must be between 5 and 10.\n
                                 - If the card name or effect includes words such as "最強" or "無敵", the value may be 100 or higher.\n
-                                - Effect must be simple and short (within 20 characters)\n
-                                - Unique name and unique effect\n
-                                - Output JSON only (no extra text)\n
-                                - All text values in the output JSON must be written in Japanese.\n` +
+                                - Effect must be simple and short (within 20 characters).\n
+                                - Unique name and unique effect.\n
+                                - Output JSON only (no extra text).\n
+                                - All text values in the output JSON must be written in Japanese.\n
+                                - No multi-hit attacks or damage-over-time effects.` +
                             `Spot name: ${spotName}\n` +
                             `Output format: {"name":"Card Name","category":"attack|defense|heal","value":1,"effect":"Effect text"}`
                 }]

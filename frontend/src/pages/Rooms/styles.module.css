@@ -119,16 +119,12 @@
 }
 
 .loadingOverlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
 }
 
-.loadingCard {
+.loadingAnimationWarp {
     background: #fff;
     padding: 20px 28px;
     border-radius: 12px;
@@ -136,7 +132,7 @@
     text-align: center;
 }
 
-.loadingCard > p {
+.loadingAnimationWarp > p {
     margin: 0;
     line-height: 1.6;
 }

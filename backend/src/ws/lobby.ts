@@ -7,6 +7,7 @@ export type LobbyDeps = {
     send: (ws: Client, obj: unknown) => void
     broadcast: (obj: unknown) => void
     sendTo: (player: string, obj: unknown) => void
+    setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string }) => void
     getMembers: () => string[]
     getHostId: () => string | null
     isHost: (clientId?: string) => boolean
@@ -47,6 +48,9 @@ export async function handleLobbyMessage(
             return
         }
 
+        // 全員に「準備中」を通知
+        deps.broadcast({ type: 'start_pending' })
+
         const latitude = typeof parsed.lat === 'number' ? parsed.lat : null
         const longitude = typeof parsed.lng === 'number' ? parsed.lng : null
         if (latitude === null || longitude === null) {
@@ -74,10 +78,14 @@ export async function handleLobbyMessage(
                 if (!pick) continue
                 // 1人ずつ別のカードを生成
                 const geminiCard = await GeminiAPI(geminiApiKey, pick.name)
+                deps.setAiCard(player, {
+                    spot: geminiCard.spotName,
+                    card_effect: geminiCard.effect,
+                    card_img: geminiCard.imageBase64 ?? ''
+                })
                 deps.sendTo(player, {
                     type: 'ai_card',
                     spot: geminiCard.spotName,
-                    card_name: geminiCard.name,
                     card_effect: geminiCard.effect,
                     card_img: geminiCard.imageBase64 ?? 'not null'
                 })

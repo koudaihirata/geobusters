@@ -20,6 +20,8 @@ const MAX_HP = 10
 const CLIENT_ID_STORAGE_KEY = 'rooms:clientId'
 // プレイログ表示用の共有状態
 type SharedPlayView = { attacker?: string | null; attackCardId?: number | null; target?: string | null; defenseCardId?: number | null }
+// AIカードの受信データ
+type AiCardMsg = { type: 'ai_card'; spot: string; card_effect: string; card_img: string }
 
 // ====== WS メッセージ型 ======
 type DefenseSnapshot = { attacker: string; target: string; damage: number; cardId?: number; defenseCardId?: number }
@@ -30,7 +32,15 @@ type GameOverMsg = { type: 'game_over'; winner?: string }
 type PhaseChangedMsg = { type: 'phase_changed'; phase: 'lobby' | 'game' }
 type DefenseRequestedMsg = { type: 'defense_requested'; attacker: string; target: string; damage: number; cardId: number; defenseCardId?: number }
 type HandUpdateMsg = { type: 'hand_update'; hand: number[] }
-type GameWsMsg = GameStartedMsg | StateMsg | PlayedMsg | GameOverMsg | PhaseChangedMsg | DefenseRequestedMsg | HandUpdateMsg
+type GameWsMsg = GameStartedMsg | StateMsg | PlayedMsg | GameOverMsg | PhaseChangedMsg | DefenseRequestedMsg | HandUpdateMsg | AiCardMsg
+
+// AIカードの型
+type aiCardDetailType = {
+    "name": string,
+    "category": CardCategory,
+    "value": number,
+    "effect": string
+}
 
 // デッキ外のスポットカードID
 const SPOT_CARD_ID = 9999
@@ -46,6 +56,7 @@ const isGameWsMsg = (msg: unknown): msg is GameWsMsg => {
         || type === 'phase_changed'
         || type === 'defense_requested'
         || type === 'hand_update'
+        || type === 'ai_card'
 }
 
 // プレイヤー配列の重複を除外しつつ順序を維持
@@ -89,7 +100,13 @@ export default function Game() {
     const [phase, setPhase] = useState<'action' | 'defense'>('action')
     const [selectedCardIndex, setSelectedCardIndex] = useState<number|null>(null)
     const [defensePrompt, setDefensePrompt] = useState<DefenseSnapshot | null>(null)
-    const [spotCardName, setSpotCardName] = useState<string>('近くのスポットカード')
+    const [aiCard, setAiCard] = useState<AiCardMsg | null>(null)
+    const [aiCardDetail, setAiCardDetail] = useState<aiCardDetailType>({
+        name: '',
+        category: 'special',
+        value: 0,
+        effect: ''
+    })
     // ターン/ターゲット関連
     const isMyTurn = st.turn === name
     const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
@@ -267,11 +284,13 @@ export default function Game() {
                         {
                             const incoming = typedMsg.hand ?? []
                             // 本来の3枚に、位置連動のオリジナルカード（非デッキ由来）を1枚追加表示する
-                            const nearestSpot = '近くのスポット' // TODO: 位置情報/API連携で最寄りスポット名を取得
-                            setSpotCardName(`${nearestSpot}のカード`)
                             setHand([...incoming, SPOT_CARD_ID])
                         }
                         setSelectedCardIndex(null)
+                        break
+                    case 'ai_card':
+                        setAiCard(typedMsg)
+                        stringToJson(typedMsg.card_effect)
                         break
                     default:
                         console.warn('未処理のタイプを受信', typedMsg)
@@ -407,10 +426,10 @@ export default function Game() {
         if (cardId === SPOT_CARD_ID) {
             return {
                 id: SPOT_CARD_ID,
-                label: spotCardName,
-                detail: 'デッキとは別にAIが生成した特別カード',
-                category: 'attack' as const,
-                img: ''
+                label: aiCardDetail.name,
+                detail: aiCardDetail.effect,
+                category: aiCardDetail.category,
+                img: aiCard?.card_img ?? ''
             }
         }
         return CARD_LIBRARY[cardId]
@@ -497,6 +516,38 @@ export default function Game() {
         special: styles.special
     }
 
+    // カード画像の参照先を解決（base64/asset）
+    const resolveCardImgSrc = (card: CardMeta) => {
+        if (card.img && card.img.startsWith('data:')) return card.img
+        if (card.img && card.img.length > 100) return `data:image/png;base64,${card.img}`
+        if (card.img) return `${card.img}.svg`
+        return 'Group.svg'
+    }
+
+    // AI生成カードをstringからJSONに復元
+    const stringToJson = (aiCard: string | undefined) => {
+        try {
+            if (!aiCard) {
+                return console.log('AI card JSON not failed');
+            }
+            const trimmed = aiCard.trim()
+            const jsonText = trimmed.startsWith('```')
+                ? trimmed.replace(/```json\s*/i, '').replace(/```$/, '').trim()
+                : trimmed
+            const parsed: aiCardDetailType = JSON.parse(jsonText)
+            setAiCardDetail({
+                name: parsed.name,
+                category: parsed.category,
+                value: parsed.value,
+                effect: parsed.effect
+            })
+            // return parsed
+        } catch (error) {
+            console.warn('AI card JSON parse failed', error)
+            return null
+        }
+    }
+
     // ====== プレイログのカード表示 ======
     const CardSlot = ({
         card,
@@ -511,10 +562,14 @@ export default function Game() {
                 {showCard ? (
                     <div className={`${styles.selectedCardBar} ${categoryClass[card.category] ?? ''}`}>
                         <div className={styles.cardImg}>
-                            <img src={`${card.img}.svg`} />
+                            <img src={resolveCardImgSrc(card)} />
                         </div>
                         <div className={styles.cardWrap}>
-                            <p className={styles.selectedCardName}><span className={styles.selectedCardNameLabel}>{card.label}</span></p>
+                            <p className={styles.selectedCardName}>
+                                <span className={card.label.length > 8 ? styles.selectedCardNameLabelSmall : styles.selectedCardNameLabel}>
+                                    {card.label}
+                                </span>
+                            </p>
                             <p className={styles.selectedCardDetail}>{card.detail}</p>
                         </div>
                     </div>
@@ -645,17 +700,15 @@ export default function Game() {
                             const meta: CardMeta = cardId === SPOT_CARD_ID
                                 ? {
                                     id: SPOT_CARD_ID,
-                                    label: spotCardName,
-                                    detail: 'AI生成のスペシャルカード（デッキ外）',
-                                    category: 'special' as const,
-                                    img: ''
+                                    label: aiCardDetail.name,
+                                    detail: aiCardDetail.effect,
+                                    category: aiCardDetail.category,
+                                    img: aiCard?.card_img ?? ''
                                 }
                                 : CARD_LIBRARY[cardId]
                             if (!meta) return null
                             const perCardCategoryClass = categoryClass[meta.category] ?? ''
-                            const usable = cardId === SPOT_CARD_ID
-                                ? false
-                                : meta.category === 'defense'
+                            const usable = meta.category === 'defense'
                                     ? isDefenseTurn
                                     : canPlayAttackCard
                             return (
@@ -669,10 +722,14 @@ export default function Game() {
                                     }}
                                 >
                                     <div className={styles.cardImg}>
-                                        <img src={`${meta.img}.svg`} />
+                                        <img src={resolveCardImgSrc(meta)} />
                                     </div>
                                     <div className={styles.cardWrap}>
-                                        <p className={`${styles.selectedCardName} ${styles.cardName}`}><span className={meta.label.length > 8 ? styles.selectedCardNameLabelSmall : styles.selectedCardNameLabelNormal}>{meta.label}</span></p>
+                                        <p className={`${styles.selectedCardName} ${styles.cardName}`}>
+                                            <span className={meta.label.length > 8 ? styles.selectedCardNameLabelSmall : styles.selectedCardNameLabelNormal}>
+                                                {meta.label}
+                                            </span>
+                                        </p>
                                         <p className={`${styles.selectedCardDetail} ${styles.cardDetail}`}>{meta.detail}</p>
                                     </div>
                                 </button>

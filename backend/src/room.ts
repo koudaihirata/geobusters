@@ -18,6 +18,7 @@ export class Room {
   private hostClientId: string | null = null
 
   private game = new GameEngine()
+  private aiCards: Map<string, { spot: string; card_effect: string; card_img: string }> = new Map()
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state
@@ -147,6 +148,9 @@ export class Room {
         const target = clientByName(player)
         if (target) this.send(target, o)
       },
+      setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string }) => {
+        this.aiCards.set(player, card)
+      },
       getMembers: () => this.members(),
       getHostId: () => this.hostClientId,
       isHost: (clientId?: string) => !!clientId && clientId === this.hostClientId,
@@ -175,6 +179,10 @@ export class Room {
         turn: this.game.currentTurnName(),
       })
       this.game.sendHandSnapshot(gameDeps, name)
+      const aiCard = this.aiCards.get(name)
+      if (aiCard) {
+        this.send(server, { type: 'ai_card', ...aiCard })
+      }
     }
 
     const promoteToGame = () => {
@@ -248,6 +256,7 @@ export class Room {
         if (result === 'game_over') {
           this.phase = 'lobby'
           this.broadcast({ type: 'phase_changed', phase: 'lobby' })
+          this.aiCards.clear()
         }
       } catch (e) {
         console.log('[DO] parse error', e)
@@ -281,6 +290,7 @@ export class Room {
         // ホストの clientId は保持するが、アクティブな接続はいない
         this.hostClientId = null
         this.preferredHostId = null
+        this.aiCards.clear()
         this.broadcast({
           type: 'system',
           text: '🔴 ルームは一旦リセットされました',
