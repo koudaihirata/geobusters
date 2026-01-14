@@ -68,6 +68,7 @@ export async function GeminiAPI(
                         no card border.
                         no frame.
                         full-bleed illustration.
+                        full-bleed / no border / no white margin.
                     `
                 }]
             }]

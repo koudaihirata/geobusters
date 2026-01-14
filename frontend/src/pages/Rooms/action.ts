@@ -1,5 +1,7 @@
 // src/pages/Rooms/action.ts
 
+import type { CardCategory } from "../../utils/cards";
+
 export type WsAction =
   | { type: 'SET_ROOM'; roomId: string }
   | { type: 'SET_NAME'; name: string }
@@ -11,6 +13,7 @@ export type WsAction =
   | { type: 'SET_INPUT'; input: string }
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_MEMBERS'; members: string[]; hostId?: string | null }
+  | { type: 'AI_CARD_DETAIL'; name: string; category: CardCategory; value: number; effect: string, img: string}
 
 export const setRoom = (roomId: string): WsAction => ({ type: 'SET_ROOM', roomId });
 export const setName = (name: string): WsAction => ({ type: 'SET_NAME', name });
@@ -21,4 +24,5 @@ export const joined = (roomId: string): WsAction => ({ type: 'JOINED', roomId })
 export const appendLog = (line: string): WsAction => ({ type: 'APPEND_LOG', line });
 export const setInput = (input: string): WsAction => ({ type: 'SET_INPUT', input });
 export const setLoading = (loading: boolean): WsAction => ({ type: 'SET_LOADING', loading });
-export const setMembers = (members: string[], hostId?: string | null): WsAction => ({ type: 'SET_MEMBERS', members, hostId })
+export const setMembers = (members: string[], hostId?: string | null): WsAction => ({ type: 'SET_MEMBERS', members, hostId });
+export const setAiCardDetail = (name: string, category: CardCategory, value: number, effect: string, img: string): WsAction => ({ type: 'AI_CARD_DETAIL', name, category, value, effect, img })

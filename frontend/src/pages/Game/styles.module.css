@@ -89,66 +89,6 @@
   overflow: hidden;
 }
 
-.cardImg {
-  width: 90%;
-  height: 50%;
-  margin: 5% auto 0;
-  border-radius: 8px 8px 0 0;
-  background-color: #fff;
-
-  > img {
-    width: 100%;
-    height: 100%;
-    border-radius: 8px 8px 0 0;
-    /* object-fit: cover; */
-  }
-}
-
-.cardWrap {
-  width: 100%;
-  height: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background-color: #FFF8EA;
-}
-
-.selectedCardName {
-  margin: 0;
-  width: 120%;
-  height: 35%;
-  background-color: #FFF4DB;
-  border: 2.5px solid #FFD17A;
-  font-weight: bold;
-  box-shadow: 3px 3px 5px 0 rgba(0, 0, 0, 0.25);
-  transform: translateY(-8px) rotate(-5deg);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: var(--textColor);
-}
-
-.selectedCardNameLabel {
-  font-size: 16px;
-  /* -webkit-text-fill-color: white;
-  -webkit-text-stroke: .8px black; */
-}
-
-.selectedCardNameLabelNormal {
-  font-size: 12px;
-}
-
-.selectedCardNameLabelSmall {
-  font-size: 8px;
-}
-
-.selectedCardDetail {
-  width: 90%;
-  margin: 0px auto;
-  font-size: 8px;
-  color: var(--textColor);
-}
-
 .selectArea {
   height: 60%;
   display: flex;

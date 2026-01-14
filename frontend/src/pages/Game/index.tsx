@@ -4,6 +4,9 @@ import { baseURL } from '../../utils/baseURL'
 import styles from './styles.module.css'
 import { CARD_LIBRARY, type CardCategory, type CardMeta } from '../../utils/cards'
 import NormalBtn from '../../components/button/NormalBtn'
+import { stringToJson } from '../../utils/stringToJson'
+import SelectedCard from '../../components/SelectedCard'
+import { resolveCardImgSrc } from '../../utils/resolveCardImg'
 
 // ====== 型定義 ======
 type S = {
@@ -35,7 +38,7 @@ type HandUpdateMsg = { type: 'hand_update'; hand: number[] }
 type GameWsMsg = GameStartedMsg | StateMsg | PlayedMsg | GameOverMsg | PhaseChangedMsg | DefenseRequestedMsg | HandUpdateMsg | AiCardMsg
 
 // AIカードの型
-type aiCardDetailType = {
+export type aiCardDetailType = {
     "name": string,
     "category": CardCategory,
     "value": number,
@@ -290,7 +293,7 @@ export default function Game() {
                         break
                     case 'ai_card':
                         setAiCard(typedMsg)
-                        stringToJson(typedMsg.card_effect)
+                        parseAiCardDetail(typedMsg.card_effect)
                         break
                     default:
                         console.warn('未処理のタイプを受信', typedMsg)
@@ -516,37 +519,19 @@ export default function Game() {
         special: styles.special
     }
 
-    // カード画像の参照先を解決（base64/asset）
-    const resolveCardImgSrc = (card: CardMeta) => {
-        if (card.img && card.img.startsWith('data:')) return card.img
-        if (card.img && card.img.length > 100) return `data:image/png;base64,${card.img}`
-        if (card.img) return `${card.img}.svg`
-        return 'Group.svg'
+    // AI生成カードをstringからJSONに復元
+    const parseAiCardDetail = (aiCardText?: string) => {
+        const parsed = stringToJson(aiCardText)
+        if (!parsed) return
+        setAiCardDetail({
+            name: parsed.name,
+            category: parsed.category,
+            value: parsed.value,
+            effect: parsed.effect
+        })
     }
 
-    // AI生成カードをstringからJSONに復元
-    const stringToJson = (aiCard: string | undefined) => {
-        try {
-            if (!aiCard) {
-                return console.log('AI card JSON not failed');
-            }
-            const trimmed = aiCard.trim()
-            const jsonText = trimmed.startsWith('```')
-                ? trimmed.replace(/```json\s*/i, '').replace(/```$/, '').trim()
-                : trimmed
-            const parsed: aiCardDetailType = JSON.parse(jsonText)
-            setAiCardDetail({
-                name: parsed.name,
-                category: parsed.category,
-                value: parsed.value,
-                effect: parsed.effect
-            })
-            // return parsed
-        } catch (error) {
-            console.warn('AI card JSON parse failed', error)
-            return null
-        }
-    }
+    
 
     // ====== プレイログのカード表示 ======
     const CardSlot = ({
@@ -561,17 +546,11 @@ export default function Game() {
             <div className={styles.cardSlot}>
                 {showCard ? (
                     <div className={`${styles.selectedCardBar} ${categoryClass[card.category] ?? ''}`}>
-                        <div className={styles.cardImg}>
-                            <img src={resolveCardImgSrc(card)} />
-                        </div>
-                        <div className={styles.cardWrap}>
-                            <p className={styles.selectedCardName}>
-                                <span className={card.label.length > 8 ? styles.selectedCardNameLabelNormal : styles.selectedCardNameLabel}>
-                                    {card.label}
-                                </span>
-                            </p>
-                            <p className={styles.selectedCardDetail}>{card.detail}</p>
-                        </div>
+                        <SelectedCard
+                            card={card}
+                            resolveCardImgSrc={resolveCardImgSrc}
+                            small={false}
+                            />
                     </div>
                 ) : (
                     <div className={styles.selectedCardBar}>
@@ -721,17 +700,11 @@ export default function Game() {
                                         setSelectedCardIndex(prev => prev === idx ? null : idx)
                                     }}
                                 >
-                                    <div className={styles.cardImg}>
-                                        <img src={resolveCardImgSrc(meta)} />
-                                    </div>
-                                    <div className={styles.cardWrap}>
-                                        <p className={`${styles.selectedCardName} ${styles.cardName}`}>
-                                            <span className={meta.label.length > 8 ? styles.selectedCardNameLabelSmall : styles.selectedCardNameLabelNormal}>
-                                                {meta.label}
-                                            </span>
-                                        </p>
-                                        <p className={`${styles.selectedCardDetail} ${styles.cardDetail}`}>{meta.detail}</p>
-                                    </div>
+                                    <SelectedCard
+                                        card={meta}
+                                        resolveCardImgSrc={resolveCardImgSrc}
+                                        small={true}
+                                        />
                                 </button>
                             )
                         })}

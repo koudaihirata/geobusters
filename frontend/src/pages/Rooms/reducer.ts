@@ -1,5 +1,6 @@
 // src/pages/Rooms/reducer.ts
 
+import type { CardMeta } from "../../utils/cards"
 import { type WsAction } from "./action"
 
 export type State = {
@@ -11,7 +12,8 @@ export type State = {
     logs: string[],
     members: string[],
     hostId: string | null,
-    loading: boolean
+    loading: boolean,
+    aiCardDetail: CardMeta
 }
 
 export const defaultState: State = {
@@ -23,7 +25,14 @@ export const defaultState: State = {
     logs: [],
     members: [],
     hostId: null,
-    loading: false
+    loading: false,
+    aiCardDetail: {
+        id: 9999,
+        label: '生成の巻',
+        category: 'special',
+        detail: 'AIにカードを生成してもらっています',
+        img: ''
+    },
 }
 
 export function Reducer(state: State, action: WsAction): State {
@@ -90,6 +99,18 @@ export function Reducer(state: State, action: WsAction): State {
                 nextState.hostId = action.hostId ?? null
             }
             return nextState
+        }
+        case 'AI_CARD_DETAIL': {
+            return {
+                ...state,
+                aiCardDetail: {
+                    id: state.aiCardDetail.id,
+                    label: action.name,
+                    category: action.category,
+                    detail: action.effect,
+                    img: action.img
+                }
+            }
         }
     }
     throw new (class SystemException {})()

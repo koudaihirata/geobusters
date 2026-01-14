@@ -3,11 +3,14 @@
 import styles from './styles.module.css'
 import { useEffect, useReducer, useRef } from 'react'
 import { defaultState, Reducer } from './reducer';
-import { appendLog, connected, disconnected, joined, setLoading, setMembers, setName, setRoom } from './action';
+import { appendLog, connected, disconnected, joined, setAiCardDetail, setLoading, setMembers, setName, setRoom } from './action';
 import { baseURL } from '../../utils/baseURL';
 import NormalBtn from '../../components/button/NormalBtn';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { geoError, geoOptions } from '../../utils/geoFunc';
+import { stringToJson } from '../../utils/stringToJson';
+import SelectedCard from '../../components/SelectedCard';
+import { resolveCardImgSrc } from '../../utils/resolveCardImg';
 
 type WsMsg =
   | { type: 'hello'; text: string }
@@ -150,6 +153,8 @@ export default function Rooms() {
               break
             case 'ai_card':
               dispatch(appendLog(`🃏 AICard. 場所:${msg.spot} 効果説明:${msg.card_effect} カード画像:${msg.card_img}`))
+              parseAiCardDetail(msg.card_effect, msg.card_img)
+              console.log(`Rooms/index.tsx:${msg.card_effect}`);
               break
             case 'game_started':
               navigate(`/game?room=${encodeURIComponent(state.roomId)}&name=${encodeURIComponent(state.name)}`)
@@ -212,6 +217,14 @@ export default function Rooms() {
   const claimHost = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
     wsRef.current.send(JSON.stringify({ type: 'claim_host' }))
+  }
+
+  // AI生成カードをstringからJSONに復元
+  const parseAiCardDetail = (aiCardText: string | undefined, img: string) => {
+      console.log(`aiCardTextチェック：${aiCardText}`);
+      const parsed = stringToJson(aiCardText)
+      if (!parsed) return
+      dispatch(setAiCardDetail(parsed.name, parsed.category, parsed.value, parsed.effect, img))
   }
 
   useEffect(() => {
@@ -360,11 +373,21 @@ export default function Rooms() {
       <>
         {state.loading && (
           <div className={styles.loadingOverlay}>
+            <div className={styles.loadingAnimationWarp} style={{opacity: 0}}></div>
             <div className={styles.loadingCard}>
+              <SelectedCard
+                card={state.aiCardDetail}
+                resolveCardImgSrc={resolveCardImgSrc}
+                small={false}
+                />
             </div>
             <div className={styles.loadingAnimationWarp}>
               <p>必殺技カード生成中...</p>
-              <div className={styles.loadingAnimation}></div>
+              <div className={styles.loadingAnimation}>
+                {Array.from({ length: 14 }).map((_, index) => (
+                  <div key={index} className={styles.memory}></div>
+                ))}
+              </div>
             </div>
           </div>
         )}
