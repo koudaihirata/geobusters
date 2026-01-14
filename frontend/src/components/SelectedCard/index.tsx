@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import type { CardMeta } from '../../utils/cards'
 import styles from './styles.module.css'
+import { trimImage } from '../../utils/trimImage'
 
 type Props = {
   card: CardMeta
@@ -12,10 +14,32 @@ export default function SelectedCard({
   resolveCardImgSrc,
   small 
 }: Props) {
+  const [trimmedSrc, setTrimmedSrc] = useState<string | null>(null)
+  const rawSrc = resolveCardImgSrc(card)
+
+  useEffect(() => {
+    let isActive = true
+    setTrimmedSrc(null)
+
+    if (!rawSrc.startsWith('data:image/')) return
+
+    const img = new Image()
+    img.onload = () => {
+      if (!isActive) return
+      const result = trimImage(img)
+      if (result) setTrimmedSrc(result)
+    }
+    img.src = rawSrc
+
+    return () => {
+      isActive = false
+    }
+  }, [rawSrc])
+
   return (
     <>
       <div className={styles.cardImg}>
-        <img src={resolveCardImgSrc(card)} />
+        <img src={trimmedSrc ?? rawSrc} />
       </div>
       <div className={styles.cardWrap}>
         <p className={styles.selectedCardName}>
