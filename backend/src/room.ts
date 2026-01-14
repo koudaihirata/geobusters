@@ -151,6 +151,9 @@ export class Room {
       setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string }) => {
         this.aiCards.set(player, card)
       },
+      clearAiCards: () => {
+        this.aiCards.clear()
+      },
       getMembers: () => this.members(),
       getHostId: () => this.hostClientId,
       isHost: (clientId?: string) => !!clientId && clientId === this.hostClientId,

@@ -8,6 +8,7 @@ export type LobbyDeps = {
     broadcast: (obj: unknown) => void
     sendTo: (player: string, obj: unknown) => void
     setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string }) => void
+    clearAiCards: () => void
     getMembers: () => string[]
     getHostId: () => string | null
     isHost: (clientId?: string) => boolean
@@ -48,6 +49,9 @@ export async function handleLobbyMessage(
             return
         }
 
+        // 前回のAIカードをクリア（使い回し防止）
+        deps.clearAiCards()
+
         // 全員に「準備中」を通知
         deps.broadcast({ type: 'start_pending' })
 
@@ -72,9 +76,19 @@ export async function handleLobbyMessage(
                 deps.send(ws, { type: 'error', text: 'GeminiのAPIキーが設定されていません' })
                 return
             }
+            const randomIndex = (max: number) => {
+                const buf = new Uint32Array(1)
+                crypto.getRandomValues(buf)
+                return buf[0] % max
+            }
+            const poolBase = results.slice()
+            let pool = poolBase.slice()
             for (const player of members) {
-                const idx = Math.floor(Math.random() * results.length)
-                const pick = results[idx]
+                if (pool.length === 0) {
+                    pool = poolBase.slice()
+                }
+                const idx = randomIndex(pool.length)
+                const pick = pool.splice(idx, 1)[0]
                 if (!pick) continue
                 // 1人ずつ別のカードを生成
                 const geminiCard = await GeminiAPI(geminiApiKey, pick.name)
