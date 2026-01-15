@@ -1,23 +1,19 @@
-```txt
-npm install
-npm run dev
-```
+# バックエンド（GeoBusters）
 
-```txt
-npm run deploy
-```
+ルームの管理、ゲーム進行、AIカード生成を担当する領域です。  
+WebSocketでのリアルタイム通信と、Durable Objectsによる状態保持が中心です。
 
-[For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
+## ここでやっていること
+- ルームの参加/退出とホスト管理
+- ゲーム開始・ターン進行・勝敗判定
+- 位置情報を使ったスポット検索
+- AIカード生成と各プレイヤーへの配布
 
-```txt
-npm run cf-typegen
-```
+## 苦労した点
+- WebSocketの再接続時に状態が崩れないようにする設計
+- プレイヤーごとにAIカードを分けるロジック
+- AIの返すJSONが不安定で、パースや正規化が必要だった点
 
-Pass the `CloudflareBindings` as generics when instantiation `Hono`:
-
-```ts
-// src/index.ts
-const app = new Hono<{ Bindings: CloudflareBindings }>()
-```
-
-本番環境確認コマンド：npx wrangler tail backend-ws
+## ここまで読んでくれた方へ
+サーバーは「ゲームの正しさ」を担保する場所です。  
+クライアント都合で状態が壊れないよう、できるだけここで整合性を取る設計にしています。
