@@ -7,11 +7,18 @@ export type AiCardDetail = {
     effect: string
 }
 
-export const stringToJson = (aiCard?: string): AiCardDetail | null => {
+const defaultTarget: AiCardDetail = {
+    name: 'defaultTarget',
+    category: 'attack',
+    value: 100000,
+    effect: 'defaultTarget'
+}
+
+export const stringToJson = (aiCard?: string): AiCardDetail => {
     try {
         if (!aiCard) {
             console.log('aiCard not null');
-            return null
+            return defaultTarget
         }
         const trimmed = aiCard.trim()
         const jsonText = trimmed.startsWith('```')
@@ -20,6 +27,6 @@ export const stringToJson = (aiCard?: string): AiCardDetail | null => {
         return JSON.parse(jsonText) as AiCardDetail
     } catch (error) {
         console.warn('AI card JSON parse failed', error)
-        return null
+        return defaultTarget
     }
 }

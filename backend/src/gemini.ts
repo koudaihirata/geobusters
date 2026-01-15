@@ -51,14 +51,11 @@ export async function GeminiAPI(
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
     }
     const text = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
-    const rawJson = text.trim()
+    const rawJson: string | undefined = text.trim()
+    console.log('rawJson確認:', rawJson);
     let parsed: { name?: string; category?: AiCardCategory; value?: number; effect?: string } = {}
     try {
-        parsed = JSON.parse(text)
-        const effectParsed = stringToJson(parsed.effect)
-        parsed.name = effectParsed?.name
-        parsed.category = effectParsed?.category
-        parsed.value = effectParsed?.value
+        parsed = stringToJson(rawJson)
     } catch {
         parsed = { name: 'Unknown Card', effect: text }
     }
