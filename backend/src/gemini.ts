@@ -1,7 +1,12 @@
+type AiCardCategory = 'attack' | 'defense' | 'heal'
+
 type GeminiCard = {
     spotName: string
     name: string
+    category: AiCardCategory
+    value: number
     effect: string
+    rawJson: string
     imageBase64: string | undefined
 }
 
@@ -46,12 +51,18 @@ export async function GeminiAPI(
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
     }
     const text = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
-    let parsed: { name?: string; effect?: string } = {}
+    const rawJson = text.trim()
+    let parsed: { name?: string; category?: AiCardCategory; value?: number; effect?: string } = {}
     try {
         parsed = JSON.parse(text)
     } catch {
         parsed = { name: 'Unknown Card', effect: text }
     }
+    const category: AiCardCategory =
+        parsed.category === 'attack' || parsed.category === 'defense' || parsed.category === 'heal'
+            ? parsed.category
+            : 'attack'
+    const value = typeof parsed.value === 'number' ? parsed.value : 1
 
     // 2) 画像生成（Nanobanana）
     const imageRes = await fetch(imageApiUrl, {
@@ -99,7 +110,10 @@ export async function GeminiAPI(
     return {
         spotName,
         name: parsed.name ?? 'Unknown Card',
+        category,
+        value,
         effect: parsed.effect ?? 'No effect',
+        rawJson,
         imageBase64
     }
 }

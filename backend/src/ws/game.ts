@@ -1,10 +1,12 @@
 // src/ws/game.ts
 import type { Client } from '../types'
+import { getAttackDamage, getDefenseValue, getHealValue, isAttackCard, isDefenseCard, isHealCard } from './cards'
 
 export type GameDeps = {
     send: (ws: Client, obj: unknown) => void
     broadcast: (obj: unknown) => void
     getPlayers: () => string[]
+    getAiCardMeta: (player: string) => { category: 'attack' | 'defense' | 'heal'; value: number } | null
     sendTo: (player: string, obj: unknown) => void
 }
 
@@ -34,11 +36,8 @@ export type GameState = {
     pendingDefense?: PendingDefense
     hands: Map<string, number[]>
     lastActor?: string
+    aiCardUsed: Set<string>
 }
-
-const isAttackCard = (id: number) => Math.floor(id / 100) === 1
-const isDefenseCard = (id: number) => Math.floor(id / 100) === 2
-const isHealCard = (id: number) => Math.floor(id / 100) === 3
 
 export class GameEngine {
     state: GameState = {
@@ -53,7 +52,8 @@ export class GameEngine {
         phase: 'action',
         pendingDefense: undefined,
         hands: new Map(),
-        lastActor: undefined
+        lastActor: undefined,
+        aiCardUsed: new Set()
     }
 
     currentTurnName() { return this.state.players[this.state.turnIdx] ?? '' }
@@ -162,6 +162,7 @@ export class GameEngine {
         this.state.deck = {}
         this.state.discard = {}
         this.state.hands = new Map()
+        this.state.aiCardUsed = new Set()
         for (const player of players) {
             this.state.deck[player] = this.buildDeck()
             this.state.discard[player] = []
@@ -253,23 +254,61 @@ export class GameEngine {
 
         const { cardId, target } = parsed
 
+        /* AIカード（ID: 9999） */
+        if (cardId === 9999) {
+            const aiMeta = deps.getAiCardMeta(actor)
+            if (!aiMeta) { deps.send(ws, { type:'error', text:'AIカード情報が見つかりません' }); return }
+            if (this.state.aiCardUsed.has(actor)) { deps.send(ws, { type:'error', text:'AIカードは既に使用済みです' }); return }
+
+            if (aiMeta.category === 'attack') {
+                const targetName = this.resolveTarget(actor, target)
+                if (!targetName) { deps.send(ws, { type:'error', text:'攻撃可能なターゲットがいません' }); return }
+                const damage = aiMeta.value
+                this.state.aiCardUsed.add(actor)
+                this.state.pendingDefense = { attacker: actor, target: targetName, cardId, damage, totalDamage: damage, blocked: 0, cardsUsed: [], lastDefenseCardId: undefined }
+                this.state.phase = 'defense'
+                deps.broadcast({
+                    type: 'defense_requested',
+                    attacker: actor,
+                    target: targetName,
+                    damage,
+                    cardId,
+                    defenseCardId: undefined
+                })
+                return
+            }
+
+            if (aiMeta.category === 'heal') {
+                const targetName = target ?? actor
+                const healValue = aiMeta.value
+                const cur = this.state.hp.get(targetName) ?? 0
+                this.state.hp.set(targetName, cur + healValue)
+                this.state.aiCardUsed.add(actor)
+                const nextInfo = this.advanceTurnInfo(actor)
+                deps.broadcast({
+                    type:'played',
+                    by: actor,
+                    cardId,
+                    target: targetName,
+                    delta:{ hp: { [targetName]: healValue } },
+                    next: nextInfo
+                })
+                return
+            }
+
+            deps.send(ws, { type:'error', text:'防御AIカードは防御ターンでのみ使用できます' })
+            return
+        }
+
         /* 攻撃カード */
         if (isAttackCard(cardId)) {
             const targetName = this.resolveTarget(actor, target)
             if (!targetName) { deps.send(ws, { type:'error', text:'攻撃可能なターゲットがいません' }); return }
             if (!this.useCard(deps, actor, cardId)) return
-
-            let damage = 0
-            switch (cardId) {
-                case 101:
-                    damage = 1
-                    break;
-                case 102:
-                    damage = 3
-                    break;
-                default:
-                    deps.send(ws, { type:'error', text:`未知の攻撃カード: ${cardId}` })
-                    return
+            const damage = getAttackDamage(cardId)
+            if (damage === null) {
+                deps.send(ws, { type:'error', text:`未知の攻撃カード: ${cardId}` })
+                return
             }
 
             this.state.pendingDefense = { attacker: actor, target: targetName, cardId, damage, totalDamage: damage, blocked: 0, cardsUsed: [], lastDefenseCardId: undefined }
@@ -288,16 +327,10 @@ export class GameEngine {
         /* 回復カード */
         if (isHealCard(cardId)) {
             if (!this.useCard(deps, actor, cardId)) return
-
-            let healValue = 0
-            switch (cardId) {
-                case 301:
-                    healValue = 2
-                    break;
-            
-                default:
-                    deps.send(ws, { type:'error', text:`未知の回復カード: ${cardId}` })
-                    return
+            const healValue = getHealValue(cardId)
+            if (healValue === null) {
+                deps.send(ws, { type:'error', text:`未知の回復カード: ${cardId}` })
+                return
             }
 
             const targetName = target ?? actor
@@ -335,8 +368,32 @@ export class GameEngine {
             return
         }
         if (!isDefenseCard(parsed.cardId)) {
-            deps.send(ws, { type:'error', text:'使用できるのは防御カードのみです' })
-            return
+            if (parsed.cardId !== 9999) {
+                deps.send(ws, { type:'error', text:'使用できるのは防御カードのみです' })
+                return
+            }
+        }
+        if (parsed.cardId === 9999) {
+            const aiMeta = deps.getAiCardMeta(actor)
+            if (!aiMeta) { deps.send(ws, { type:'error', text:'AIカード情報が見つかりません' }); return }
+            if (aiMeta.category !== 'defense') { deps.send(ws, { type:'error', text:'防御AIカードではありません' }); return }
+            if (this.state.aiCardUsed.has(actor)) { deps.send(ws, { type:'error', text:'AIカードは既に使用済みです' }); return }
+
+            // 1攻撃につき防御カードは1枚だけ使用可
+            if (pending.cardsUsed.length >= 1) {
+                deps.send(ws, { type:'error', text:'この攻撃にはこれ以上防御カードを使えません' })
+                return
+            }
+
+            const defenseValue = aiMeta.value
+            this.state.aiCardUsed.add(actor)
+            pending.damage = Math.max(0, pending.damage - defenseValue)
+            pending.blocked += defenseValue
+            pending.cardsUsed.push(parsed.cardId)
+            pending.lastDefenseCardId = parsed.cardId
+
+            // 防御カードは1枚のみ使用可とするため、この時点で防御処理を完了する
+            return this.finishPendingDefense(deps)
         }
         // 1攻撃につき防御カードは1枚だけ使用可
         if (pending.cardsUsed.length >= 1) {
@@ -344,18 +401,10 @@ export class GameEngine {
             return
         }
         if (!this.useCard(deps, actor, parsed.cardId)) return
-
-        let defenseValue = 0
-        switch (parsed.cardId) {
-            case 201:
-                defenseValue = 1
-                break;
-            case 202:
-                defenseValue = 3
-                break;
-            default:
-                deps.send(ws, { type:'error', text:`未知の防御カード: ${parsed.cardId}` })
-                return
+        const defenseValue = getDefenseValue(parsed.cardId)
+        if (defenseValue === null) {
+            deps.send(ws, { type:'error', text:`未知の防御カード: ${parsed.cardId}` })
+            return
         }
 
         pending.damage = Math.max(0, pending.damage - defenseValue)

@@ -7,7 +7,7 @@ export type LobbyDeps = {
     send: (ws: Client, obj: unknown) => void
     broadcast: (obj: unknown) => void
     sendTo: (player: string, obj: unknown) => void
-    setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string }) => void
+    setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string; category: 'attack' | 'defense' | 'heal'; value: number }) => void
     clearAiCards: () => void
     getMembers: () => string[]
     getHostId: () => string | null
@@ -94,13 +94,15 @@ export async function handleLobbyMessage(
                 const geminiCard = await GeminiAPI(geminiApiKey, pick.name)
                 deps.setAiCard(player, {
                     spot: geminiCard.spotName,
-                    card_effect: geminiCard.effect,
-                    card_img: geminiCard.imageBase64 ?? ''
+                    card_effect: geminiCard.rawJson,
+                    card_img: geminiCard.imageBase64 ?? '',
+                    category: geminiCard.category,
+                    value: geminiCard.value
                 })
                 deps.sendTo(player, {
                     type: 'ai_card',
                     spot: geminiCard.spotName,
-                    card_effect: geminiCard.effect,
+                    card_effect: geminiCard.rawJson,
                     card_img: geminiCard.imageBase64
                 })
             }

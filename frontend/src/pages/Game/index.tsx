@@ -110,6 +110,8 @@ export default function Game() {
         value: 0,
         effect: ''
     })
+    const [aiCardUsed, setAiCardUsed] = useState(false)
+    const aiCardUsedRef = useRef(false)
     // ターン/ターゲット関連
     const isMyTurn = st.turn === name
     const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
@@ -127,6 +129,10 @@ export default function Game() {
     useEffect(() => {
         playersRef.current = st.players
     }, [st.players])
+
+    useEffect(() => {
+        aiCardUsedRef.current = aiCardUsed
+    }, [aiCardUsed])
 
     // ====== WS 接続 / 受信 ======
     useEffect(() => {
@@ -193,6 +199,7 @@ export default function Game() {
                         setPlayView({ attacker: null, attackCardId: null, target: null, defenseCardId: null })
                         setSelectedTarget(null)
                         setSelectedCardIndex(null)
+                        setAiCardUsed(false)
                         break
                     case 'state':
                         setSt(prev => {
@@ -287,13 +294,14 @@ export default function Game() {
                         {
                             const incoming = typedMsg.hand ?? []
                             // 本来の3枚に、位置連動のオリジナルカード（非デッキ由来）を1枚追加表示する
-                            setHand([...incoming, SPOT_CARD_ID])
+                            setHand(aiCardUsedRef.current ? incoming : [...incoming, SPOT_CARD_ID])
                         }
                         setSelectedCardIndex(null)
                         break
                     case 'ai_card':
                         setAiCard(typedMsg)
                         parseAiCardDetail(typedMsg.card_effect)
+                        setAiCardUsed(false)
                         break
                     default:
                         console.warn('未処理のタイプを受信', typedMsg)
@@ -317,7 +325,10 @@ export default function Game() {
 
     // ====== カード判定 ======
     const requiresTarget = (cardId: number) => CARD_LIBRARY[cardId]?.requiresTarget ?? false
-    const isDefenseCard = (cardId: number) => CARD_LIBRARY[cardId]?.category === 'defense'
+    const isDefenseCard = (cardId: number) => {
+        if (cardId === SPOT_CARD_ID) return aiCardDetail.category === 'defense'
+        return CARD_LIBRARY[cardId]?.category === 'defense'
+    }
 
     // ====== カード実行 ======
     const play = (cardId: number) => {
@@ -363,6 +374,10 @@ export default function Game() {
                     defenseCardId: selectedCardId
                 }))
                 play(selectedCardId)
+                if (selectedCardId === SPOT_CARD_ID && selectedCardIndex !== null) {
+                    setHand(prev => prev.filter((_, idx) => idx !== selectedCardIndex))
+                    setAiCardUsed(true)
+                }
                 setSelectedCardIndex(null)
             } else {
                 wsRef.current.send(JSON.stringify({ type:'end_turn' }))
@@ -372,9 +387,12 @@ export default function Game() {
         // action phase
         if (!canPlayAttackCard) return
         if (selectedCardId !== null) {
-            if (selectedCardId === SPOT_CARD_ID) return
             play(selectedCardId)
             if (requiresTarget(selectedCardId)) setSelectedTarget(null)
+            if (selectedCardId === SPOT_CARD_ID && selectedCardIndex !== null) {
+                setHand(prev => prev.filter((_, idx) => idx !== selectedCardIndex))
+                setAiCardUsed(true)
+            }
             setSelectedCardIndex(null)
         } else {
             wsRef.current.send(JSON.stringify({ type:'end_turn' }))
@@ -687,9 +705,9 @@ export default function Game() {
                                 : CARD_LIBRARY[cardId]
                             if (!meta) return null
                             const perCardCategoryClass = categoryClass[meta.category] ?? ''
-                            const usable = meta.category === 'defense'
+                            const usable = (cardId === SPOT_CARD_ID ? !aiCardUsed : true) && (meta.category === 'defense'
                                     ? isDefenseTurn
-                                    : canPlayAttackCard
+                                    : canPlayAttackCard)
                             return (
                                 <button
                                     key={`${cardId}-${idx}`}

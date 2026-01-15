@@ -18,7 +18,7 @@ export class Room {
   private hostClientId: string | null = null
 
   private game = new GameEngine()
-  private aiCards: Map<string, { spot: string; card_effect: string; card_img: string }> = new Map()
+  private aiCards: Map<string, { spot: string; card_effect: string; card_img: string; category: 'attack' | 'defense' | 'heal'; value: number }> = new Map()
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state
@@ -125,6 +125,11 @@ export class Room {
       send: (w: Client, o: unknown) => this.send(w, o),
       broadcast: (o: unknown) => this.broadcast(o),
       getPlayers: () => this.players(),
+      getAiCardMeta: (player: string) => {
+        const card = this.aiCards.get(player)
+        if (!card) return null
+        return { category: card.category, value: card.value }
+      },
       sendTo: (player: string, o: unknown) => {
         const target = clientByName(player)
         if (target) this.send(target, o)
@@ -148,7 +153,7 @@ export class Room {
         const target = clientByName(player)
         if (target) this.send(target, o)
       },
-      setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string }) => {
+      setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string; category: 'attack' | 'defense' | 'heal'; value: number }) => {
         this.aiCards.set(player, card)
       },
       clearAiCards: () => {
@@ -169,6 +174,11 @@ export class Room {
         broadcast: (o) => this.broadcast(o),
         send: (w, o) => this.send(w, o), // 未使用
         getPlayers: () => this.players(),
+        getAiCardMeta: (player: string) => {
+          const card = this.aiCards.get(player)
+          if (!card) return null
+          return { category: card.category, value: card.value }
+        },
         sendTo: function (player: string, obj: unknown): void {
           throw new Error('Function not implemented.');
         }
