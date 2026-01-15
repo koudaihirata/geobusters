@@ -15,5 +15,5 @@
 3. 生成されたカードで対戦
 
 ### 技術 / 開発情報
-- フロントエンド: `frontend/README.md`
-- バックエンド: `backend/README.md`
+- フロントエンド: [詳しくはこちら](frontend/README.md)
+- バックエンド: [詳しくはこちら](backend//README.md)
