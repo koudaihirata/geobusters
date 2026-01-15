@@ -1,4 +1,4 @@
-type AiCardCategory = 'attack' | 'defense' | 'heal'
+import { AiCardCategory, stringToJson } from "./utils/stringToJson"
 
 type GeminiCard = {
     spotName: string
@@ -55,14 +55,19 @@ export async function GeminiAPI(
     let parsed: { name?: string; category?: AiCardCategory; value?: number; effect?: string } = {}
     try {
         parsed = JSON.parse(text)
+        const effectParsed = stringToJson(parsed.effect)
+        parsed.name = effectParsed?.name
+        parsed.category = effectParsed?.category
+        parsed.value = effectParsed?.value
     } catch {
         parsed = { name: 'Unknown Card', effect: text }
     }
     const category: AiCardCategory =
-        parsed.category === 'attack' || parsed.category === 'defense' || parsed.category === 'heal'
-            ? parsed.category
-            : 'attack'
+    parsed.category === 'attack' || parsed.category === 'defense' || parsed.category === 'heal'
+    ? parsed.category
+    : 'attack'
     const value = typeof parsed.value === 'number' ? parsed.value : 1
+    console.log('parsed確認:', JSON.stringify(parsed));
 
     // 2) 画像生成（Nanobanana）
     const imageRes = await fetch(imageApiUrl, {

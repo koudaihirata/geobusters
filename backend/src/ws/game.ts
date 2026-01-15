@@ -6,7 +6,7 @@ export type GameDeps = {
     send: (ws: Client, obj: unknown) => void
     broadcast: (obj: unknown) => void
     getPlayers: () => string[]
-    getAiCardMeta: (player: string) => { category: 'attack' | 'defense' | 'heal'; value: number } | null
+    getAiCardMeta: (player: string, cardId: number) => { category: 'attack' | 'defense' | 'heal'; value: number } | null
     sendTo: (player: string, obj: unknown) => void
 }
 
@@ -254,10 +254,10 @@ export class GameEngine {
 
         const { cardId, target } = parsed
 
-        /* AIカード（ID: 9999） */
-        if (cardId === 9999) {
-            const aiMeta = deps.getAiCardMeta(actor)
-            if (!aiMeta) { deps.send(ws, { type:'error', text:'AIカード情報が見つかりません' }); return }
+        /* AIカード（プレイヤー専用のID） */
+        const aiMeta = deps.getAiCardMeta(actor, cardId)
+        console.log('aiMeta攻撃確認', JSON.stringify(aiMeta))
+        if (aiMeta) {
             if (this.state.aiCardUsed.has(actor)) { deps.send(ws, { type:'error', text:'AIカードは既に使用済みです' }); return }
 
             if (aiMeta.category === 'attack') {
@@ -368,15 +368,12 @@ export class GameEngine {
             return
         }
         if (!isDefenseCard(parsed.cardId)) {
-            if (parsed.cardId !== 9999) {
+            const aiMeta = deps.getAiCardMeta(actor, parsed.cardId)
+            console.log('aiMeta防御確認', JSON.stringify(aiMeta))
+            if (!aiMeta || aiMeta.category !== 'defense') {
                 deps.send(ws, { type:'error', text:'使用できるのは防御カードのみです' })
                 return
             }
-        }
-        if (parsed.cardId === 9999) {
-            const aiMeta = deps.getAiCardMeta(actor)
-            if (!aiMeta) { deps.send(ws, { type:'error', text:'AIカード情報が見つかりません' }); return }
-            if (aiMeta.category !== 'defense') { deps.send(ws, { type:'error', text:'防御AIカードではありません' }); return }
             if (this.state.aiCardUsed.has(actor)) { deps.send(ws, { type:'error', text:'AIカードは既に使用済みです' }); return }
 
             // 1攻撃につき防御カードは1枚だけ使用可

@@ -7,7 +7,7 @@ export type LobbyDeps = {
     send: (ws: Client, obj: unknown) => void
     broadcast: (obj: unknown) => void
     sendTo: (player: string, obj: unknown) => void
-    setAiCard: (player: string, card: { spot: string; card_effect: string; card_img: string; category: 'attack' | 'defense' | 'heal'; value: number }) => void
+    setAiCard: (player: string, card: { card_id: number; spot: string; card_effect: string; card_img: string; category: 'attack' | 'defense' | 'heal'; value: number }) => void
     clearAiCards: () => void
     getMembers: () => string[]
     getHostId: () => string | null
@@ -83,29 +83,64 @@ export async function handleLobbyMessage(
             }
             const poolBase = results.slice()
             let pool = poolBase.slice()
-            for (const player of members) {
-                if (pool.length === 0) {
-                    pool = poolBase.slice()
-                }
+            const assignments = members.flatMap((player, index) => {
+                if (pool.length === 0) pool = poolBase.slice()
                 const idx = randomIndex(pool.length)
                 const pick = pool.splice(idx, 1)[0]
-                if (!pick) continue
-                // 1人ずつ別のカードを生成
-                const geminiCard = await GeminiAPI(geminiApiKey, pick.name)
-                deps.setAiCard(player, {
-                    spot: geminiCard.spotName,
-                    card_effect: geminiCard.rawJson,
-                    card_img: geminiCard.imageBase64 ?? '',
-                    category: geminiCard.category,
-                    value: geminiCard.value
-                })
-                deps.sendTo(player, {
-                    type: 'ai_card',
-                    spot: geminiCard.spotName,
-                    card_effect: geminiCard.rawJson,
-                    card_img: geminiCard.imageBase64
-                })
-            }
+                const cardId = 9000 + index
+                return pick ? [{ player, pick, cardId }] : []
+            })
+            const fallbackEffect = (spotName: string) => JSON.stringify({
+                name: `${spotName}のカード`,
+                category: 'attack',
+                value: 1,
+                effect: '効果なし'
+            })
+            await Promise.all(assignments.map(async ({ player, pick, cardId }) => {
+                try {
+                    // 1人ずつ別のカードを生成
+                    const geminiCard = await GeminiAPI(geminiApiKey, pick.name)
+                    const payload = {
+                        type: 'ai_card' as const,
+                        player,
+                        card_id: cardId,
+                        spot: geminiCard.spotName,
+                        card_effect: geminiCard.rawJson,
+                        card_img: geminiCard.imageBase64
+                    }
+                    deps.setAiCard(player, {
+                        card_id: cardId,
+                        spot: geminiCard.spotName,
+                        card_effect: geminiCard.rawJson,
+                        card_img: geminiCard.imageBase64 ?? '',
+                        category: geminiCard.category,
+                        value: geminiCard.value
+                    })
+                    // 全員に送信して、受信側で自分宛てのみ処理する
+                    deps.broadcast(payload)
+                } catch (error) {
+                    const fallbackJson = fallbackEffect(pick.name)
+                    const payload = {
+                        type: 'ai_card' as const,
+                        player,
+                        card_id: cardId,
+                        spot: pick.name,
+                        card_effect: fallbackJson,
+                        card_img: ''
+                    }
+                    deps.setAiCard(player, {
+                        card_id: cardId,
+                        spot: pick.name,
+                        card_effect: fallbackJson,
+                        card_img: '',
+                        category: 'attack',
+                        value: 1
+                    })
+                    deps.broadcast(payload)
+                    deps.sendTo(player, { type: 'error', text: 'AIカード生成に失敗しました（仮カードで開始します）' })
+                    console.log('[AI] generate failed', error)
+                }
+            }))
         }
 
         // フロントにフェーズ変更を通知
