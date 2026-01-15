@@ -9,6 +9,19 @@
 - AIカードの受信と表示
 - 手札やターン表示などのゲームUI
 
+## 使用技術
+- React + TypeScript
+- Vite
+- CSS Modules
+- WebSocket クライアント（ルーム/ゲーム画面）
+- Canvas（画像トリミング）
+
+## 主なファイル/構成
+- `src/pages/Rooms` : ルーム画面（参加/待機/開始）
+- `src/pages/Game` : ゲーム画面（手札/HP/ターン）
+- `src/components/SelectedCard` : カードUI
+- `src/utils` : WebSocket/AIカード補助関数
+
 ## 苦労した点
 - WebSocketでの状態同期（RoomとGameで状態がズレやすい）
 - AIカードの受信タイミングと表示の整合性
