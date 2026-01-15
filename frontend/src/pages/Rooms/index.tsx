@@ -27,7 +27,7 @@ type WsMsg =
   | { type: 'state'; hp: Record<string, number>; round: number; turn: string }
   | { type: 'played'; by: string; cardId: number; target?: string; delta: { hp: Record<string, number> }; next?: { round: number; turn: string } }
   | { type: 'game_over'; winner: string } 
-  | { type: 'ai_card'; spot: string; card_effect: string; card_img: string}
+  | { type: 'ai_card'; card_id: number; spot: string; card_effect: string; card_img: string; player?: string }
 
 export default function Rooms() {
   const location = useLocation()
@@ -61,6 +61,7 @@ export default function Rooms() {
 
   const [state, dispatch] = useReducer(Reducer, undefined, createInitialState)
   const wsRef = useRef<WebSocket | null>(null)
+  const nameRef = useRef(state.name)
   const shouldReconnect = useRef(Boolean(navStateRef.current?.joined))
   const lastNavState = useRef<NavState>(navStateRef.current)
   const CLIENT_ID_STORAGE_KEY = 'rooms:clientId'
@@ -152,9 +153,13 @@ export default function Rooms() {
               dispatch(appendLog('⏳ ゲーム準備中...'))
               break
             case 'ai_card':
+              console.log('ai_card debug', { player: msg.player, current: nameRef.current })
+              if (msg.player) {
+                const currentName = nameRef.current.trim()
+                if (msg.player.trim() !== currentName) break
+              }
               dispatch(appendLog(`🃏 AICard. 場所:${msg.spot} 効果説明:${msg.card_effect} カード画像:${msg.card_img}`))
               parseAiCardDetail(msg.card_effect, msg.card_img)
-              console.log(`Rooms/index.tsx:${msg.card_effect}`);
               break
             case 'game_started':
               navigate(`/game?room=${encodeURIComponent(state.roomId)}&name=${encodeURIComponent(state.name)}`)
@@ -263,6 +268,10 @@ export default function Rooms() {
       console.warn('failed to persist identity', error)
     }
   }, [state.roomId, state.name])
+
+  useEffect(() => {
+    nameRef.current = state.name
+  }, [state.name])
 
   console.log(state);
 

@@ -24,7 +24,7 @@ const CLIENT_ID_STORAGE_KEY = 'rooms:clientId'
 // プレイログ表示用の共有状態
 type SharedPlayView = { attacker?: string | null; attackCardId?: number | null; target?: string | null; defenseCardId?: number | null }
 // AIカードの受信データ
-type AiCardMsg = { type: 'ai_card'; spot: string; card_effect: string; card_img: string }
+type AiCardMsg = { type: 'ai_card'; card_id: number; spot: string; card_effect: string; card_img: string; player?: string }
 
 // ====== WS メッセージ型 ======
 type DefenseSnapshot = { attacker: string; target: string; damage: number; cardId?: number; defenseCardId?: number }
@@ -36,17 +36,6 @@ type PhaseChangedMsg = { type: 'phase_changed'; phase: 'lobby' | 'game' }
 type DefenseRequestedMsg = { type: 'defense_requested'; attacker: string; target: string; damage: number; cardId: number; defenseCardId?: number }
 type HandUpdateMsg = { type: 'hand_update'; hand: number[] }
 type GameWsMsg = GameStartedMsg | StateMsg | PlayedMsg | GameOverMsg | PhaseChangedMsg | DefenseRequestedMsg | HandUpdateMsg | AiCardMsg
-
-// AIカードの型
-export type aiCardDetailType = {
-    "name": string,
-    "category": CardCategory,
-    "value": number,
-    "effect": string
-}
-
-// デッキ外のスポットカードID
-const SPOT_CARD_ID = 9999
 
 // WS で受け取るメッセージの簡易ガード
 const isGameWsMsg = (msg: unknown): msg is GameWsMsg => {
@@ -103,15 +92,11 @@ export default function Game() {
     const [phase, setPhase] = useState<'action' | 'defense'>('action')
     const [selectedCardIndex, setSelectedCardIndex] = useState<number|null>(null)
     const [defensePrompt, setDefensePrompt] = useState<DefenseSnapshot | null>(null)
-    const [aiCard, setAiCard] = useState<AiCardMsg | null>(null)
-    const [aiCardDetail, setAiCardDetail] = useState<aiCardDetailType>({
-        name: '',
-        category: 'special',
-        value: 0,
-        effect: ''
-    })
+    const [aiCardId, setAiCardId] = useState<number | null>(null)
+    const [aiCardMap, setAiCardMap] = useState<Record<number, CardMeta>>({})
     const [aiCardUsed, setAiCardUsed] = useState(false)
     const aiCardUsedRef = useRef(false)
+    const aiCardIdRef = useRef<number | null>(null)
     // ターン/ターゲット関連
     const isMyTurn = st.turn === name
     const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
@@ -133,6 +118,10 @@ export default function Game() {
     useEffect(() => {
         aiCardUsedRef.current = aiCardUsed
     }, [aiCardUsed])
+
+    useEffect(() => {
+        aiCardIdRef.current = aiCardId
+    }, [aiCardId])
 
     // ====== WS 接続 / 受信 ======
     useEffect(() => {
@@ -294,14 +283,23 @@ export default function Game() {
                         {
                             const incoming = typedMsg.hand ?? []
                             // 本来の3枚に、位置連動のオリジナルカード（非デッキ由来）を1枚追加表示する
-                            setHand(aiCardUsedRef.current ? incoming : [...incoming, SPOT_CARD_ID])
+                            const aiId = aiCardIdRef.current
+                            setHand(aiId && !aiCardUsedRef.current ? [...incoming, aiId] : incoming)
                         }
                         setSelectedCardIndex(null)
                         break
                     case 'ai_card':
-                        setAiCard(typedMsg)
-                        parseAiCardDetail(typedMsg.card_effect)
-                        setAiCardUsed(false)
+                        aiCardIdRef.current = typedMsg.card_id
+                        parseAiCardDetail(typedMsg.card_id, typedMsg.card_effect, typedMsg.card_img)
+                        if (!typedMsg.player || typedMsg.player === name) {
+                            setAiCardId(typedMsg.card_id)
+                            setAiCardUsed(false)
+                            setHand(prev => (
+                                prev.includes(typedMsg.card_id)
+                                    ? prev
+                                    : [...prev, typedMsg.card_id]
+                            ))
+                        }
                         break
                     default:
                         console.warn('未処理のタイプを受信', typedMsg)
@@ -326,9 +324,11 @@ export default function Game() {
     // ====== カード判定 ======
     const requiresTarget = (cardId: number) => CARD_LIBRARY[cardId]?.requiresTarget ?? false
     const isDefenseCard = (cardId: number) => {
-        if (cardId === SPOT_CARD_ID) return aiCardDetail.category === 'defense'
+        const aiMeta = aiCardMap[cardId]
+        if (aiMeta) return aiMeta.category === 'defense'
         return CARD_LIBRARY[cardId]?.category === 'defense'
     }
+    const isAiCard = (cardId: number) => aiCardId !== null && cardId === aiCardId
 
     // ====== カード実行 ======
     const play = (cardId: number) => {
@@ -342,7 +342,7 @@ export default function Game() {
         }
         const payload: { type: 'play'; cardId: number; target?: string } = { type: 'play', cardId }
         if (phase === 'action' && requiresTarget(cardId)) {
-            const meta: CardMeta = CARD_LIBRARY[cardId]
+            const meta: CardMeta | undefined = aiCardMap[cardId] ?? CARD_LIBRARY[cardId]
             let targetChoice = selectedTarget
             if (!targetChoice) {
                 if (meta?.category === 'heal') {
@@ -374,7 +374,7 @@ export default function Game() {
                     defenseCardId: selectedCardId
                 }))
                 play(selectedCardId)
-                if (selectedCardId === SPOT_CARD_ID && selectedCardIndex !== null) {
+                if (isAiCard(selectedCardId) && selectedCardIndex !== null) {
                     setHand(prev => prev.filter((_, idx) => idx !== selectedCardIndex))
                     setAiCardUsed(true)
                 }
@@ -389,7 +389,7 @@ export default function Game() {
         if (selectedCardId !== null) {
             play(selectedCardId)
             if (requiresTarget(selectedCardId)) setSelectedTarget(null)
-            if (selectedCardId === SPOT_CARD_ID && selectedCardIndex !== null) {
+            if (isAiCard(selectedCardId) && selectedCardIndex !== null) {
                 setHand(prev => prev.filter((_, idx) => idx !== selectedCardIndex))
                 setAiCardUsed(true)
             }
@@ -444,16 +444,7 @@ export default function Game() {
     // カードIDから表示用メタを解決
     const resolveCardMetaById = (cardId: number | null | undefined): CardMeta | undefined => {
         if (cardId === null || cardId === undefined) return undefined
-        if (cardId === SPOT_CARD_ID) {
-            return {
-                id: SPOT_CARD_ID,
-                label: aiCardDetail.name,
-                detail: aiCardDetail.effect,
-                category: aiCardDetail.category,
-                img: aiCard?.card_img ?? ''
-            }
-        }
-        return CARD_LIBRARY[cardId]
+        return aiCardMap[cardId] ?? CARD_LIBRARY[cardId]
     }
 
     const selectedCardId = selectedCardIndex !== null ? hand[selectedCardIndex] : null
@@ -538,15 +529,17 @@ export default function Game() {
     }
 
     // AI生成カードをstringからJSONに復元
-    const parseAiCardDetail = (aiCardText?: string) => {
+    const parseAiCardDetail = (cardId: number, aiCardText?: string, img?: string) => {
         const parsed = stringToJson(aiCardText)
         if (!parsed) return
-        setAiCardDetail({
-            name: parsed.name,
+        const meta: CardMeta = {
+            id: cardId,
+            label: parsed.name,
+            detail: parsed.effect,
             category: parsed.category,
-            value: parsed.value,
-            effect: parsed.effect
-        })
+            img: img ?? ''
+        }
+        setAiCardMap(prev => ({ ...prev, [cardId]: meta }))
     }
 
     
@@ -694,18 +687,10 @@ export default function Game() {
                     <div className={styles.handCards}>
                         {hand.length === 0 && <span className={styles.emptyHand}>カードなし</span>}
                         {hand.map((cardId, idx) => {
-                            const meta: CardMeta = cardId === SPOT_CARD_ID
-                                ? {
-                                    id: SPOT_CARD_ID,
-                                    label: aiCardDetail.name,
-                                    detail: aiCardDetail.effect,
-                                    category: aiCardDetail.category,
-                                    img: aiCard?.card_img ?? ''
-                                }
-                                : CARD_LIBRARY[cardId]
+                            const meta: CardMeta | undefined = aiCardMap[cardId] ?? CARD_LIBRARY[cardId]
                             if (!meta) return null
                             const perCardCategoryClass = categoryClass[meta.category] ?? ''
-                            const usable = (cardId === SPOT_CARD_ID ? !aiCardUsed : true) && (meta.category === 'defense'
+                            const usable = (isAiCard(cardId) ? !aiCardUsed : true) && (meta.category === 'defense'
                                     ? isDefenseTurn
                                     : canPlayAttackCard)
                             return (

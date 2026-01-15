@@ -35,7 +35,7 @@ export type OutboundWsMsg =
     | { type: 'game_over'; winner: string }
     | { type: 'error'; text: string; code?: string }
     | { type: 'spot_choice'; spot: string; index: number }
-    | { type: 'ai_card'; spot: string; card_effect: string; card_img: string }
+    | { type: 'ai_card'; card_id: number; spot: string; card_effect: string; card_img: string; player?: string }
     | { type: 'start_pending' }
 
 
