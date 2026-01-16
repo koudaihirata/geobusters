@@ -29,6 +29,7 @@ export async function GeminiAPI(
                             `Constraints:\n
                                 - Category must be one of "attack" | "defense" | "heal".\n
                                 - Value must be between 5 and 10.\n
+                                - If the value is between 5 and 10, the effect text must explicitly include the numeric value.\n
                                 - If the card name or effect includes words such as "最強" or "無敵", the value may be 100 or higher.\n
                                 - Effect must be simple and short (within 20 characters).\n
                                 - Unique name and unique effect.\n
