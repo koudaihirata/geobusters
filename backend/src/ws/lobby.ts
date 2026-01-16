@@ -1,7 +1,8 @@
 // src/ws/lobby.ts
 import { GeminiAPI } from '../gemini'
 import { nearBySearch } from '../NearBySearch'
-import type { Client } from '../types'
+import { buildAiImageKey, saveAiImageToR2 } from '../utils/r2'
+import type { Client, Env } from '../types'
 
 export type LobbyDeps = {
     send: (ws: Client, obj: unknown) => void
@@ -27,10 +28,7 @@ export async function handleLobbyMessage(
     ws: Client,
     name: string,
     clientId: string | undefined,
-    env: { 
-        GOOGLE_PLACES_API_KEY?: string,
-        GEMINI_API_KEY?: string
-    },
+    env: Env,
     parsed: any,                 // 受信メッセージ（JSON）
     promoteToGame: () => void    // フェーズ切替コールバック
 ) {
@@ -100,6 +98,14 @@ export async function handleLobbyMessage(
                 try {
                     // 1人ずつ別のカードを生成
                     const geminiCard = await GeminiAPI(geminiApiKey, pick.name)
+                    if (geminiCard.imageBase64) {
+                        try {
+                        const key = buildAiImageKey(geminiCard.spotName)
+                            await saveAiImageToR2(env.geobusters, geminiCard.imageBase64, key)
+                        } catch (error) {
+                            console.log('[AI] r2 upload failed', error)
+                        }
+                    }
                     const payload = {
                         type: 'ai_card' as const,
                         player,

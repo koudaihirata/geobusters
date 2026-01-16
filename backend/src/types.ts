@@ -2,6 +2,8 @@
 export interface Env {
     ROOM: DurableObjectNamespace
     GOOGLE_PLACES_API_KEY?: string
+    GEMINI_API_KEY?: string
+    geobusters: R2Bucket
 }
 
 export type Client = WebSocket
