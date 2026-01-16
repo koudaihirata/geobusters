@@ -39,6 +39,7 @@ export type OutboundWsMsg =
     | { type: 'spot_choice'; spot: string; index: number }
     | { type: 'ai_card'; card_id: number; spot: string; card_effect: string; card_img: string; player?: string }
     | { type: 'start_pending' }
+    | { type: 'replay'; stage: 'attack' | 'defense' | 'damage'; attacker?: string; target?: string; defender?: string; cardId?: number; value?: number; amount?: number }
 
 
     /** JSON.parse の直後に使う安全ヘルパ */

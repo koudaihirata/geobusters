@@ -264,6 +264,14 @@ export class GameEngine {
                 const targetName = this.resolveTarget(actor, target)
                 if (!targetName) { deps.send(ws, { type:'error', text:'攻撃可能なターゲットがいません' }); return }
                 const damage = aiMeta.value
+                deps.broadcast({
+                    type: 'replay',
+                    stage: 'attack',
+                    attacker: actor,
+                    target: targetName,
+                    cardId,
+                    value: damage
+                })
                 this.state.aiCardUsed.add(actor)
                 this.state.pendingDefense = { attacker: actor, target: targetName, cardId, damage, totalDamage: damage, blocked: 0, cardsUsed: [], lastDefenseCardId: undefined }
                 this.state.phase = 'defense'
@@ -310,6 +318,15 @@ export class GameEngine {
                 deps.send(ws, { type:'error', text:`未知の攻撃カード: ${cardId}` })
                 return
             }
+
+            deps.broadcast({
+                type: 'replay',
+                stage: 'attack',
+                attacker: actor,
+                target: targetName,
+                cardId,
+                value: damage
+            })
 
             this.state.pendingDefense = { attacker: actor, target: targetName, cardId, damage, totalDamage: damage, blocked: 0, cardsUsed: [], lastDefenseCardId: undefined }
             this.state.phase = 'defense'
@@ -383,6 +400,13 @@ export class GameEngine {
             }
 
             const defenseValue = aiMeta.value
+            deps.broadcast({
+                type: 'replay',
+                stage: 'defense',
+                defender: actor,
+                cardId: parsed.cardId,
+                value: defenseValue
+            })
             this.state.aiCardUsed.add(actor)
             pending.damage = Math.max(0, pending.damage - defenseValue)
             pending.blocked += defenseValue
@@ -404,6 +428,14 @@ export class GameEngine {
             return
         }
 
+        deps.broadcast({
+            type: 'replay',
+            stage: 'defense',
+            defender: actor,
+            cardId: parsed.cardId,
+            value: defenseValue
+        })
+
         pending.damage = Math.max(0, pending.damage - defenseValue)
         pending.blocked += defenseValue
         pending.cardsUsed.push(parsed.cardId)
@@ -423,6 +455,12 @@ export class GameEngine {
             const cur = this.state.hp.get(pending.target) ?? 0
             this.state.hp.set(pending.target, Math.max(0, cur - netDamage))
             delta[pending.target] = -netDamage
+            deps.broadcast({
+                type: 'replay',
+                stage: 'damage',
+                target: pending.target,
+                amount: netDamage
+            })
         }
         this.state.pendingDefense = undefined
         this.state.phase = 'action'

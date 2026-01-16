@@ -35,7 +35,9 @@ type GameOverMsg = { type: 'game_over'; winner?: string }
 type PhaseChangedMsg = { type: 'phase_changed'; phase: 'lobby' | 'game' }
 type DefenseRequestedMsg = { type: 'defense_requested'; attacker: string; target: string; damage: number; cardId: number; defenseCardId?: number }
 type HandUpdateMsg = { type: 'hand_update'; hand: number[] }
+type ReplayMsg = { type: 'replay'; stage: 'attack' | 'defense' | 'damage'; attacker?: string; target?: string; defender?: string; cardId?: number; value?: number; amount?: number }
 type GameWsMsg = GameStartedMsg | StateMsg | PlayedMsg | GameOverMsg | PhaseChangedMsg | DefenseRequestedMsg | HandUpdateMsg | AiCardMsg
+    | ReplayMsg
 
 // WS で受け取るメッセージの簡易ガード
 const isGameWsMsg = (msg: unknown): msg is GameWsMsg => {
@@ -49,6 +51,7 @@ const isGameWsMsg = (msg: unknown): msg is GameWsMsg => {
         || type === 'defense_requested'
         || type === 'hand_update'
         || type === 'ai_card'
+        || type === 'replay'
 }
 
 // プレイヤー配列の重複を除外しつつ順序を維持
@@ -106,6 +109,10 @@ export default function Game() {
     const canSelectTarget = phase === 'action'
     // プレイログの表示用
     const [playView, setPlayView] = useState<SharedPlayView>({ attacker: null, attackCardId: null, target: null, defenseCardId: null })
+    const [replayStage, setReplayStage] = useState<'attack' | 'defense' | 'damage' | null>(null)
+    const [damagePopup, setDamagePopup] = useState<{ target?: string | null; amount: number } | null>(null)
+    const replayTimerRef = useRef<number | null>(null)
+    const damageTimerRef = useRef<number | null>(null)
     // 手札引き直し関係
     // const allDefenseHand = hand.length === 3 && hand.every(cardId => CARD_LIBRARY[cardId]?.category === 'defense')
     // const canMulligan = canPlayAttackCard && allDefenseHand
@@ -186,6 +193,8 @@ export default function Game() {
                         setPhase('action')
                         setDefensePrompt(null)
                         setPlayView({ attacker: null, attackCardId: null, target: null, defenseCardId: null })
+                        setReplayStage(null)
+                        setDamagePopup(null)
                         setSelectedTarget(null)
                         setSelectedCardIndex(null)
                         setAiCardUsed(false)
@@ -278,6 +287,41 @@ export default function Game() {
                         setSelectedTarget(null)
                         setSelectedCardIndex(null)
                         break
+                    case 'replay':
+                        if (replayTimerRef.current !== null) {
+                            window.clearTimeout(replayTimerRef.current)
+                        }
+                        setReplayStage(typedMsg.stage)
+                        replayTimerRef.current = window.setTimeout(() => {
+                            setReplayStage(null)
+                        }, 600)
+                        if (typedMsg.stage === 'attack') {
+                            setPlayView(prev => ({
+                                ...prev,
+                                attacker: typedMsg.attacker ?? prev.attacker ?? null,
+                                target: typedMsg.target ?? prev.target ?? null,
+                                attackCardId: typedMsg.cardId ?? prev.attackCardId ?? null
+                            }))
+                        }
+                        if (typedMsg.stage === 'defense') {
+                            setPlayView(prev => ({
+                                ...prev,
+                                defenseCardId: typedMsg.cardId ?? prev.defenseCardId ?? null
+                            }))
+                        }
+                        if (typedMsg.stage === 'damage') {
+                            if (damageTimerRef.current !== null) {
+                                window.clearTimeout(damageTimerRef.current)
+                            }
+                            setDamagePopup({
+                                target: typedMsg.target ?? null,
+                                amount: typedMsg.amount ?? 0
+                            })
+                            damageTimerRef.current = window.setTimeout(() => {
+                                setDamagePopup(null)
+                            }, 900)
+                        }
+                        break
                     case 'hand_update':
                         console.log('hand_update', typedMsg.hand)
                         {
@@ -309,6 +353,12 @@ export default function Game() {
             }
         }
         return () => {
+            if (replayTimerRef.current !== null) {
+                window.clearTimeout(replayTimerRef.current)
+            }
+            if (damageTimerRef.current !== null) {
+                window.clearTimeout(damageTimerRef.current)
+            }
             try { ws.close() } catch(error) { console.log(error) }
         }
     }, [room, name, navigate])
@@ -547,16 +597,18 @@ export default function Game() {
     // ====== プレイログのカード表示 ======
     const CardSlot = ({
         card,
-        isSelf
+        isSelf,
+        animate
     }: {
         card: typeof selectedCardMeta | null | undefined
         isSelf: boolean
+        animate: boolean
     }) => {
         const showCard = card && (card.category !== 'attack' || isSelf)
         return (
             <div className={styles.cardSlot}>
                 {showCard ? (
-                    <div className={`${styles.selectedCardBar} ${categoryClass[card.category] ?? ''}`}>
+                    <div className={`${styles.selectedCardBar} ${categoryClass[card.category] ?? ''} ${animate ? styles.replayRise : ''}`}>
                         <SelectedCard
                             card={card}
                             resolveCardImgSrc={resolveCardImgSrc}
@@ -590,9 +642,14 @@ export default function Game() {
                         <div className={styles.rightPlayerName}><p>{rightPlayerName ?? '---'}</p></div>
                     </div>
                     <div className={styles.playCardArea}>
-                        <CardSlot card={leftCardMeta} isSelf={true} />
-                        <CardSlot card={rightCardMeta ?? null} isSelf={false} />
+                        <CardSlot card={leftCardMeta} isSelf={true} animate={replayStage === 'attack'} />
+                        <CardSlot card={rightCardMeta ?? null} isSelf={false} animate={replayStage === 'defense'} />
                     </div>
+                    {damagePopup && damagePopup.amount > 0 && (
+                        <div className={styles.damagePopup} key={`${damagePopup.target ?? 'target'}-${damagePopup.amount}`}>
+                            -{damagePopup.amount}
+                        </div>
+                    )}
                 </div>
             </div>
 
