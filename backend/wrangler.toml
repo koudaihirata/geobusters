@@ -10,3 +10,7 @@ class_name = "Room"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+[[r2_buckets]]
+binding = "geobusters"
+bucket_name = "geobusters" 
