@@ -333,11 +333,13 @@ export default function Game() {
                         setSelectedCardIndex(null)
                         break
                     case 'ai_card':
-                        aiCardIdRef.current = typedMsg.card_id
                         parseAiCardDetail(typedMsg.card_id, typedMsg.card_effect, typedMsg.card_img)
                         if (!typedMsg.player || typedMsg.player === name) {
+                            if (aiCardUsedRef.current) break
+                            aiCardIdRef.current = typedMsg.card_id
                             setAiCardId(typedMsg.card_id)
                             setAiCardUsed(false)
+                            aiCardUsedRef.current = false
                             setHand(prev => (
                                 prev.includes(typedMsg.card_id)
                                     ? prev
@@ -425,8 +427,9 @@ export default function Game() {
                 }))
                 play(selectedCardId)
                 if (isAiCard(selectedCardId) && selectedCardIndex !== null) {
-                    setHand(prev => prev.filter((_, idx) => idx !== selectedCardIndex))
+                    setHand(prev => prev.filter(id => id !== selectedCardId))
                     setAiCardUsed(true)
+                    aiCardUsedRef.current = true
                 }
                 setSelectedCardIndex(null)
             } else {
@@ -440,8 +443,9 @@ export default function Game() {
             play(selectedCardId)
             if (requiresTarget(selectedCardId)) setSelectedTarget(null)
             if (isAiCard(selectedCardId) && selectedCardIndex !== null) {
-                setHand(prev => prev.filter((_, idx) => idx !== selectedCardIndex))
+                setHand(prev => prev.filter(id => id !== selectedCardId))
                 setAiCardUsed(true)
+                aiCardUsedRef.current = true
             }
             setSelectedCardIndex(null)
         } else {

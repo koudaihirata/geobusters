@@ -8,6 +8,7 @@ export type GameDeps = {
     getPlayers: () => string[]
     getAiCardMeta: (player: string, cardId: number) => { category: 'attack' | 'defense' | 'heal'; value: number } | null
     sendTo: (player: string, obj: unknown) => void
+    revealAiCard: (player: string, cardId: number) => void
 }
 
 export type TurnPhase = 'action' | 'defense'
@@ -264,6 +265,7 @@ export class GameEngine {
                 const targetName = this.resolveTarget(actor, target)
                 if (!targetName) { deps.send(ws, { type:'error', text:'攻撃可能なターゲットがいません' }); return }
                 const damage = aiMeta.value
+                deps.revealAiCard(actor, cardId)
                 deps.broadcast({
                     type: 'replay',
                     stage: 'attack',
@@ -291,6 +293,7 @@ export class GameEngine {
                 const healValue = aiMeta.value
                 const cur = this.state.hp.get(targetName) ?? 0
                 this.state.hp.set(targetName, cur + healValue)
+                deps.revealAiCard(actor, cardId)
                 this.state.aiCardUsed.add(actor)
                 const nextInfo = this.advanceTurnInfo(actor)
                 deps.broadcast({
@@ -392,6 +395,7 @@ export class GameEngine {
                 return
             }
             if (this.state.aiCardUsed.has(actor)) { deps.send(ws, { type:'error', text:'AIカードは既に使用済みです' }); return }
+            deps.revealAiCard(actor, parsed.cardId)
 
             // 1攻撃につき防御カードは1枚だけ使用可
             if (pending.cardsUsed.length >= 1) {

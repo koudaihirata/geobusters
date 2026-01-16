@@ -130,6 +130,11 @@ export class Room {
         if (!card || card.card_id !== cardId) return null
         return { category: card.category, value: card.value }
       },
+      revealAiCard: (player: string, cardId: number) => {
+        const card = this.aiCards.get(player)
+        if (!card || card.card_id !== cardId) return
+        this.broadcast({ type: 'ai_card', ...card, player })
+      },
       sendTo: (player: string, o: unknown) => {
         const target = clientByName(player)
         if (target) this.send(target, o)
@@ -178,6 +183,11 @@ export class Room {
           const card = this.aiCards.get(player)
           if (!card || card.card_id !== cardId) return null
           return { category: card.category, value: card.value }
+        },
+        revealAiCard: (player: string, cardId: number) => {
+          const card = this.aiCards.get(player)
+          if (!card || card.card_id !== cardId) return
+          this.broadcast({ type: 'ai_card', ...card, player })
         },
         sendTo: function (player: string, obj: unknown): void {
           throw new Error('Function not implemented.');
