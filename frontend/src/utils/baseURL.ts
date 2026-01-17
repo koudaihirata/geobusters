@@ -1,1 +1,1 @@
-export const baseURL = 'wss://backend-ws.hiratakoudai61.workers.dev/ws'
+export const baseURL = 'wss://geobusters-backend.hiratakoudai61.workers.dev/ws'
