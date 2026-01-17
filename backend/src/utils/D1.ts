@@ -8,10 +8,22 @@ export type CreateEventBody = {
     image: string;
 };
 
+function getDB(env: unknown): D1Database {
+    if (
+        typeof env === "object" &&
+        env !== null &&
+        "DB" in env &&
+        (env as any).DB
+    ) {
+        return (env as any).DB as D1Database;
+    }
+    throw new Error("env.DB is missing. Check wrangler.toml binding = \"DB\".");
+}
+
 export async function handleEvent(
     pathname: string,
 	req: Request,
-	env: Env
+	env: unknown
 ): Promise<Response | null> {
     if (req.method !== "POST") return null;
     if (pathname !== "/events") return null;
@@ -39,8 +51,9 @@ export async function handleEvent(
     }
 
     const now = new Date().toISOString();
+    const db = getDB(env);
 
-    const stmt = env.DB.prepare(`
+    const stmt = db.prepare(`
         INSERT INTO events (user_id, location, image, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?)
     `).bind(body.user_id, body.location, body.image, now, now);

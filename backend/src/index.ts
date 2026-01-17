@@ -1,6 +1,7 @@
 // src/index.ts
 import { Hono } from 'hono'
 import type { Env } from './types'
+import { handleEvent } from './utils/D1'
 export { Room } from './room'  // ← DO クラスをエクスポート（wrangler が拾う）
 
 const app = new Hono<{ Bindings: Env }>()
@@ -23,6 +24,11 @@ app.get('/ws', async (c) => {
     method: c.req.method,
     headers: c.req.raw.headers,
   }))
+})
+
+app.get('/events', async (c) => {
+  const res = await handleEvent('/events', c.req.raw, c.env)
+  return res ?? c.json({ error: 'Not Found' }, 404)
 })
 
 app.get('/', (c) => {
