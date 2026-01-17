@@ -26,11 +26,6 @@ app.get('/ws', async (c) => {
   }))
 })
 
-app.get('/events', async (c) => {
-  const res = await handleEvent('/events', c.req.raw, c.env)
-  return res ?? c.json({ error: 'Not Found' }, 404)
-})
-
 app.get('/', (c) => {
   console.log('[index] GET /')
   return c.text('WS with Durable Objects.')
