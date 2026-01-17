@@ -1,4 +1,4 @@
-name = "backend-ws"
+name = "geobusters-backend"
 main = "src/index.ts"
 compatibility_date = "2025-10-28"
 workers_dev = true
@@ -14,3 +14,8 @@ new_sqlite_classes = ["Room"]
 [[r2_buckets]]
 binding = "geobusters"
 bucket_name = "geobusters" 
+
+[[d1_databases]]
+binding = "DB"
+database_name = "geobusters-db"
+database_id = "a41a02c1-5cea-40b1-b63d-132232829169"
