@@ -1,48 +1,16 @@
-type Env = {
-	DB: D1Database;
-};
-
-export type CreateEventBody = {
-    user_id: number;
-    location: number;
-    image: string;
-};
-
-function getDB(env: unknown): D1Database {
-    if (
-        typeof env === "object" &&
-        env !== null &&
-        "DB" in env &&
-        (env as any).DB
-    ) {
-        return (env as any).DB as D1Database;
-    }
-    throw new Error("env.DB is missing. Check wrangler.toml binding = \"DB\".");
-}
+import { Env } from "../types";
 
 export async function handleEvent(
-    pathname: string,
-	req: Request,
-	env: unknown
+    userId: number,
+    location: string,
+    imgKey: string,
+	env: Env
 ): Promise<Response | null> {
-    if (req.method !== "POST") return null;
-    if (pathname !== "/events") return null;
-
-    let body: CreateEventBody
-    try {
-        body = await req.json()
-    } catch {
-        return new Response(JSON.stringify({ error: "Invalid JSON"}), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-        })
-    }
-
     if (
-        typeof body.user_id !== 'number' ||
-        typeof body.location !== 'string' ||
-        typeof body.image !== 'string' ||
-        body.image.length === 0
+        typeof userId !== 'number' ||
+        typeof location !== 'string' ||
+        typeof imgKey !== 'string' ||
+        imgKey.length === 0
     ) {
         return new Response(JSON.stringify({ error: "Invalid body" }), {
             status: 400,
@@ -50,13 +18,13 @@ export async function handleEvent(
         });
     }
 
+    const imgURL = `https://pub-b72f7038c8a745e0af4028c7a9575f6a.r2.dev/${imgKey}`
     const now = new Date().toISOString();
-    const db = getDB(env);
 
-    const stmt = db.prepare(`
+    const stmt = env.DB.prepare(`
         INSERT INTO events (user_id, location, image, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?)
-    `).bind(body.user_id, body.location, body.image, now, now);
+    `).bind(userId, location, imgURL, now, now);
 
     try {
         const result = await stmt.run();

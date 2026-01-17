@@ -3,6 +3,7 @@ import { GeminiAPI } from '../gemini'
 import { nearBySearch } from '../NearBySearch'
 import { buildAiImageKey, saveAiImageToR2 } from '../utils/r2'
 import type { Client, Env } from '../types'
+import { handleEvent } from '../utils/D1'
 
 export type LobbyDeps = {
     send: (ws: Client, obj: unknown) => void
@@ -99,9 +100,10 @@ export async function handleLobbyMessage(
                     // 1人ずつ別のカードを生成
                     const geminiCard = await GeminiAPI(geminiApiKey, pick.name)
                     if (geminiCard.imageBase64) {
-                        try {
                         const key = buildAiImageKey(geminiCard.spotName)
+                        try {
                             await saveAiImageToR2(env.geobusters, geminiCard.imageBase64, key)
+                            await handleEvent(1, pick.name, key, env)
                         } catch (error) {
                             console.log('[AI] r2 upload failed', error)
                         }

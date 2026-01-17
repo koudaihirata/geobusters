@@ -4,6 +4,7 @@ export interface Env {
     GOOGLE_PLACES_API_KEY?: string
     GEMINI_API_KEY?: string
     geobusters: R2Bucket
+    DB: D1Database
 }
 
 export type Client = WebSocket
