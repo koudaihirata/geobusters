@@ -1,3 +1,5 @@
+リンク: [geobusters.jp](https://www.geobusters.jp/rooms)
+
 ## ジオバスターズ（GeoBusters）
 
 ジオバスターズは、現在地の周辺スポットを手がかりにAIがカードを生成し、オンライン対戦で遊べるリアルタイムカードゲームです。  
