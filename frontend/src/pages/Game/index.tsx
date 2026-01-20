@@ -98,8 +98,14 @@ export default function Game() {
     const [aiCardId, setAiCardId] = useState<number | null>(null)
     const [aiCardMap, setAiCardMap] = useState<Record<number, CardMeta>>({})
     const [aiCardUsed, setAiCardUsed] = useState(false)
+    const [finish, setFinish] = useState<{
+        results: boolean
+        winner: string | undefined
+    }>({ results: false, winner: '' })
     const aiCardUsedRef = useRef(false)
     const aiCardIdRef = useRef<number | null>(null)
+    const navigatedRef = useRef(false)
+    const finishRef = useRef(false)
     // ターン/ターゲット関連
     const isMyTurn = st.turn === name
     const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
@@ -256,12 +262,16 @@ export default function Game() {
                         setSelectedCardIndex(null)
                         break
                     case 'game_over':
-                        alert(`勝者: ${typedMsg.winner ?? '不明'}`)
+                        finishRef.current = true
+                        setFinish({
+                            results: true,
+                            winner: typedMsg.winner
+                        })
                         setDefensePrompt(null)
-                        returnToRooms()
                         break
                     case 'phase_changed':
                         if (typedMsg.phase === 'lobby') {
+                            if (finishRef.current) break
                             returnToRooms()
                         }
                         setDefensePrompt(null)
@@ -373,6 +383,9 @@ export default function Game() {
         }
     }, [canPlayAttackCard])
 
+    // === 決着したかを同期的に伝える ===
+    useEffect(() => { finishRef.current = finish.results }, [finish.results])
+
     // ====== カード判定 ======
     const requiresTarget = (cardId: number) => CARD_LIBRARY[cardId]?.requiresTarget ?? false
     const isDefenseCard = (cardId: number) => {
@@ -413,6 +426,7 @@ export default function Game() {
 
     // ====== 行動決定 ======
     const commitAction = () => {
+        if (finishRef.current) return
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
         const selectedCardId = selectedCardIndex !== null ? hand[selectedCardIndex] : null
         if (phase === 'defense') {
@@ -596,7 +610,28 @@ export default function Game() {
         setAiCardMap(prev => ({ ...prev, [cardId]: meta }))
     }
 
-    
+    // ルームへ戻る遷移
+    const gameToRooms = (con: boolean) => {
+        if (navigatedRef.current) return
+        navigatedRef.current = true
+
+        setDefensePrompt(null)
+        setPhase('action')
+        setHand([])
+
+        const navState = {
+            joined: con,
+            roomId: room,
+            name,
+            members: playersRef.current
+        }
+        try { wsRef.current?.close() } catch (error) { console.log(error) }
+        navigate('/rooms', {
+            replace: true,
+            state: navState
+        })
+    }
+
 
     // ====== プレイログのカード表示 ======
     const CardSlot = ({
@@ -788,6 +823,30 @@ export default function Game() {
                     /> 
                 </div>
             </div>
+            {finish.results && (  
+            <div className={styles.matchResults}>
+                <div className={styles.matchResultsWinnerWrap}>
+                    <div className={styles.winnerBadge}>
+                        <img className={styles.winner} src={`winner.svg`} alt="勝者" />
+                        <img className={styles.bigLight} src={`bigLight.svg`}/>
+                        <img className={styles.miniLight} src={`miniLight.svg`}/>
+                    </div>
+                    <p className={styles.winnerName}>{finish.winner}</p>
+                </div>
+                <div className={styles.matchResultsBtnWrap}>
+                    <div className={styles.stopGame}>
+                        <NormalBtn label='やめる' bg='#c7c7c7ff' onClick={() => {
+                            gameToRooms(false)
+                        }} />
+                    </div>
+                    <div className={styles.continueGame}>
+                        <NormalBtn label='続ける' onClick={() => {
+                            gameToRooms(true)
+                        }} />
+                    </div>
+                </div>
+            </div>
+            )}
         </div>
     )
 }

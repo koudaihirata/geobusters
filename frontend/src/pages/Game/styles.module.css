@@ -377,7 +377,7 @@
 
 /* 選択中は常に最前面にする（nth-child 指定より後で、かつ高優先度） */
 .handCards .cardToken.cardTokenSelected {
-  z-index: 99 !important;
+  z-index: 99;
 }
 
 .cardName {
@@ -433,4 +433,74 @@
 }
 .special {
   background: var(--specialColor);
+}
+
+
+/* === マッチリザルト画面 === */
+.matchResults {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  z-index: 1000 !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+
+  .matchResultsWinnerWrap {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    padding: 18px 22px;
+    isolation: isolate;
+  
+    /* winner.svg 本体 */
+    .winnerBadge {
+      display: block;
+      position: relative;
+      filter: drop-shadow(0 8px 18px rgba(0,0,0,0.22));
+      animation: winnerPop 620ms cubic-bezier(.2,.9,.2,1) both;
+
+      .winner {
+        position: relative;
+        z-index: 2;
+      }
+      .bigLight {
+        position: absolute;
+        bottom: -50%;
+        left: 25%;
+        z-index: 1;
+      }
+      .miniLight {
+        position: absolute;
+        bottom: -85%;
+        left: -55%;
+        z-index: 1;
+      }
+    }
+    .winnerName {
+      color: #FFF;
+      text-align: center;
+      font-family: Inter;
+      font-size: 2.4rem;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 150%;
+      letter-spacing: -0.0456rem;
+      margin: 1rem;
+    }
+  }
+  .matchResultsBtnWrap {
+    width: 80%;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+
+    >div {
+      width: 100px;
+    }
+  }
 }
