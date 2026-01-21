@@ -520,6 +520,7 @@ export class GameEngine {
         this.state.phase = 'action'
         this.consumeStatusTurn(pending.target)
 
+        // === 毒のステータスを所持 ===
         if (pending.statusEffect && netDamage > 0) {
             const remainingHp = this.state.hp.get(pending.target) ?? 0
             if (remainingHp > 0) {
@@ -639,6 +640,7 @@ export class GameEngine {
         const current = this.ensureStatus(player)
         let statusChanged = false
 
+        // === 毒のダメージ処理 ====
         if (current.poison > 0) {
             const curHp = this.state.hp.get(player) ?? 0
             this.state.hp.set(player, Math.max(0, curHp - 1))
@@ -655,6 +657,7 @@ export class GameEngine {
         return { statusChanged }
     }
 
+    // === まひ中かどうかの判定 ===
     private isParalyzed(player: string) {
         const current = this.ensureStatus(player)
         return current.paralyze > 0
@@ -663,6 +666,7 @@ export class GameEngine {
     private consumeStatusTurn(player: string) {
         const current = this.ensureStatus(player)
         if (current.paralyze <= 0 && current.poison <= 0) return
+        // === 毒とまひのターン数減少 ===
         current.paralyze = Math.max(0, current.paralyze - 1)
         current.poison = Math.max(0, current.poison - 1)
         this.state.status.set(player, current)
