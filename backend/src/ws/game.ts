@@ -1,6 +1,6 @@
 // src/ws/game.ts
 import type { Client } from '../types'
-import { getAttackDamage, getDefenseValue, getHealValue, getSpecialCardEffect, isAttackCard, isDefenseCard, isHealCard, isSpecialCard } from './cards'
+import { getAttackEffect, getAttackDamage, getDefenseValue, getHealValue, isAttackCard, isDefenseCard, isHealCard } from './cards'
 
 export type GameDeps = {
     send: (ws: Client, obj: unknown) => void
@@ -22,6 +22,7 @@ export type PendingDefense = {
     blocked: number
     cardsUsed: number[]
     lastDefenseCardId?: number
+    statusEffect?: { status: 'poison' | 'paralyze'; amount: number }
 }
 
 export type GameState = {
@@ -102,7 +103,7 @@ export class GameEngine {
     }
 
     buildDeck() {
-        const ids = [101,101,102,102,201,202,301,301,401,402,403,404]
+        const ids = [101,101,102,102,103,104,201,202,301,301]
         for (let i = ids.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1))
             ;[ids[i], ids[j]] = [ids[j], ids[i]]
@@ -340,49 +341,18 @@ export class GameEngine {
             return
         }
 
-        /* 特殊カード */
-        if (isSpecialCard(cardId)) {
-            if (!this.useCard(deps, actor, cardId)) return
-            const effect = getSpecialCardEffect(cardId)
-            if (!effect) {
-                deps.send(ws, { type:'error', text:`未知の特殊カード: ${cardId}` })
-                return
-            }
-            const targetName = effect.target === 'self'
-                ? actor
-                : this.resolveTarget(actor, target)
-            if (!targetName) {
-                deps.send(ws, { type:'error', text:'対象が見つかりません' })
-                return
-            }
-            this.applyStatus(targetName, effect.status, effect.amount)
-            this.consumeParalyzeTurn(actor)
-            const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
-            if (nextInfo === 'game_over') return 'game_over'
-            deps.broadcast({
-                type:'played',
-                by: actor,
-                cardId,
-                target: targetName,
-                delta:{ hp: {} },
-                status: this.statusSnapshot(),
-                next: nextInfo
-            })
-            return
-        }
-
         /* 攻撃カード */
         if (isAttackCard(cardId)) {
             const targetName = this.resolveTarget(actor, target)
             if (!targetName) { deps.send(ws, { type:'error', text:'攻撃可能なターゲットがいません' }); return }
             if (!this.useCard(deps, actor, cardId)) return
-            const damage = getAttackDamage(cardId)
-            if (damage === null) {
+            const attackEffect = getAttackEffect(cardId)
+            if (!attackEffect) {
                 deps.send(ws, { type:'error', text:`未知の攻撃カード: ${cardId}` })
                 return
             }
 
-            const totalDamage = damage + this.consumeAttackBonus(actor)
+            const totalDamage = attackEffect.damage + this.consumeAttackBonus(actor)
             deps.broadcast({
                 type: 'replay',
                 stage: 'attack',
@@ -392,7 +362,17 @@ export class GameEngine {
                 value: totalDamage
             })
 
-            this.state.pendingDefense = { attacker: actor, target: targetName, cardId, damage: totalDamage, totalDamage: totalDamage, blocked: 0, cardsUsed: [], lastDefenseCardId: undefined }
+            this.state.pendingDefense = {
+                attacker: actor,
+                target: targetName,
+                cardId,
+                damage: totalDamage,
+                totalDamage: totalDamage,
+                blocked: 0,
+                cardsUsed: [],
+                lastDefenseCardId: undefined,
+                statusEffect: attackEffect.statusEffect
+            }
             this.state.phase = 'defense'
             deps.broadcast({
                 type: 'defense_requested',
@@ -539,6 +519,9 @@ export class GameEngine {
         this.state.phase = 'action'
         this.consumeParalyzeTurn(pending.target)
 
+        if (pending.statusEffect) {
+            this.applyStatus(pending.target, pending.statusEffect.status, pending.statusEffect.amount)
+        }
         const alive = this.removeDefeatedPlayers()
         if (this.state.players.length === 0) {
             this.state.started = false
