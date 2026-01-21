@@ -871,7 +871,7 @@ export default function Game() {
                 <div className={`${styles.cardButtons} ${playersToDisplay.length <= 4 ? styles.btnStyleAdjustment : ''}`}>
                     <NormalBtn 
                         label={selectedCardIndex !== null ? '行動決定' : phase === 'defense' ? '防御しない' : 'ターンエンド'}
-                        disabled={isParalyzed || (phase === 'defense' ? !isDefenseTurn : !canPlayAttackCard)}
+                        disabled={phase === 'defense' ? !isDefenseTurn : !canPlayAttackCard}
                         onClick={commitAction}
                     /> 
                 </div>
