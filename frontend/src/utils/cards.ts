@@ -9,10 +9,17 @@ export type CardMeta = {
     img: string
 }
 
+export const STATUS_BONUS_VALUE = {
+    attackUp: 2,
+    defenseUp: 2
+}
+
 export const CARD_LIBRARY: Record<number, CardMeta> = {
     /* 攻撃カード */
     101: { id: 101, label: '木の剣', detail: '1ダメージを与える', category: 'attack', requiresTarget: true, allowSelfTarget: true, img: 'cards/woodenSword' },
     102: { id: 102, label: '真剣', detail: '3ダメージを与える', category: 'attack', requiresTarget: true, allowSelfTarget: true, img: '' },
+    103: { id: 103, label: '毒剣', detail: '1ダメージを与える+1ターン毒状態にする', category: 'attack', requiresTarget: true, allowSelfTarget: true, img: '' },
+    104: { id: 104, label: '麻痺矢', detail: '1ダメージを与える+1ターンまひ状態にする', category: 'attack', requiresTarget: true, allowSelfTarget: true, img: '' },
     /* 防御カード */
     201: { id: 201, label: 'ボロボロの盾', detail: '1ダメージ防ぐ', category: 'defense', img: 'cards/woodenShield' },
     202: { id: 202, label: '量産型シールド', detail: '3ダメージ防ぐ', category: 'defense', img: '' },

@@ -2,21 +2,23 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { baseURL } from '../../utils/baseURL'
 import styles from './styles.module.css'
-import { CARD_LIBRARY, type CardCategory, type CardMeta } from '../../utils/cards'
+import { CARD_LIBRARY, STATUS_BONUS_VALUE, type CardCategory, type CardMeta } from '../../utils/cards'
 import NormalBtn from '../../components/button/NormalBtn'
 import { stringToJson } from '../../utils/stringToJson'
 import SelectedCard from '../../components/SelectedCard'
 import { resolveCardImgSrc } from '../../utils/resolveCardImg'
 
 // ====== 型定義 ======
+type StatusEffects = { poison: number; paralyze: number; attackUp: number; defenseUp: number }
 type S = {
     players: string[]
     hp: Record<string, number>
+    status: Record<string, StatusEffects>
     round: number
     turn: string
 }
 // 初期状態
-const initS: S = { players:[], hp:{}, round:1, turn:'' }
+const initS: S = { players:[], hp:{}, status:{}, round:1, turn:'' }
 // HP の上限
 const MAX_HP = 10
 // clientId 保管キー
@@ -28,9 +30,9 @@ type AiCardMsg = { type: 'ai_card'; card_id: number; spot: string; card_effect: 
 
 // ====== WS メッセージ型 ======
 type DefenseSnapshot = { attacker: string; target: string; damage: number; cardId?: number; defenseCardId?: number }
-type GameStartedMsg = { type: 'game_started'; players?: string[]; hp?: Record<string, number>; round?: number; turn?: string }
-type StateMsg = { type: 'state'; hp?: Record<string, number>; round?: number; turn?: string; phase?: 'action' | 'defense'; defense?: DefenseSnapshot }
-type PlayedMsg = { type: 'played'; by?: string; cardId?: number; target?: string; delta?: { hp?: Record<string, number> }; next?: { round?: number; turn?: string }; defense?: { by: string; cardId?: number; blocked: number; cards?: number[] } }
+type GameStartedMsg = { type: 'game_started'; players?: string[]; hp?: Record<string, number>; status?: Record<string, StatusEffects>; round?: number; turn?: string }
+type StateMsg = { type: 'state'; hp?: Record<string, number>; status?: Record<string, StatusEffects>; round?: number; turn?: string; phase?: 'action' | 'defense'; defense?: DefenseSnapshot }
+type PlayedMsg = { type: 'played'; by?: string; cardId?: number; target?: string; delta?: { hp?: Record<string, number> }; status?: Record<string, StatusEffects>; next?: { round?: number; turn?: string }; defense?: { by: string; cardId?: number; blocked: number; cards?: number[] } }
 type GameOverMsg = { type: 'game_over'; winner?: string }
 type PhaseChangedMsg = { type: 'phase_changed'; phase: 'lobby' | 'game' }
 type DefenseRequestedMsg = { type: 'defense_requested'; attacker: string; target: string; damage: number; cardId: number; defenseCardId?: number }
@@ -113,6 +115,7 @@ export default function Game() {
     const isDefenseTurn = phase === 'defense' && defensePrompt?.target === name
     const canPlayAttackCard = phase === 'action' && isMyTurn
     const canSelectTarget = phase === 'action'
+    const isParalyzed = (st.status[name]?.paralyze ?? 0) > 0
     // プレイログの表示用
     const [playView, setPlayView] = useState<SharedPlayView>({ attacker: null, attackCardId: null, target: null, defenseCardId: null })
     const [replayStage, setReplayStage] = useState<'attack' | 'defense' | 'damage' | null>(null)
@@ -192,6 +195,7 @@ export default function Game() {
                         setSt({
                             players: typedMsg.players ?? [],
                             hp: typedMsg.hp ?? {},
+                            status: typedMsg.status ?? {},
                             round: typedMsg.round ?? 1,
                             turn: typedMsg.turn ?? ''
                         })
@@ -213,6 +217,7 @@ export default function Game() {
                                 ...prev,
                                 players,
                                 hp,
+                                status: typedMsg.status ?? prev.status,
                                 round: typedMsg.round ?? prev.round,
                                 turn: typedMsg.turn ?? prev.turn
                             }
@@ -242,6 +247,7 @@ export default function Game() {
                                 ...prev,
                                 players,
                                 hp: nextHp,
+                                status: typedMsg.status ?? prev.status,
                                 round: typedMsg.next?.round ?? prev.round,
                                 turn: typedMsg.next?.turn ?? prev.turn
                             }
@@ -414,6 +420,8 @@ export default function Game() {
                     targetChoice = name
                 } else if (meta?.category === 'attack') {
                     targetChoice = defaultAttackTarget(name)
+                } else if (meta?.category === 'special') {
+                    targetChoice = meta.allowSelfTarget ? name : defaultAttackTarget(name)
                 } else if (meta?.allowSelfTarget) {
                     targetChoice = name
                 }
@@ -496,6 +504,41 @@ export default function Game() {
         if (percent <= 30) return styles.hpLow
         if (percent <= 50) return styles.hpHalf
         return styles.hpFull
+    }
+
+    const resolveStatus = (player: string): StatusEffects => (
+        st.status[player] ?? { poison: 0, paralyze: 0, attackUp: 0, defenseUp: 0 }
+    )
+
+    const renderStatusBadges = (player: string) => {
+        const status = resolveStatus(player)
+        const badges: Array<{ key: string; label: string; className: string }> = []
+        if (status.poison > 0) badges.push({ key: 'poison', label: `毒${status.poison}`, className: styles.statusPoison })
+        if (status.paralyze > 0) badges.push({ key: 'paralyze', label: `まひ${status.paralyze}`, className: styles.statusParalyze })
+        if (status.attackUp > 0) {
+            badges.push({
+                key: 'attackUp',
+                label: `攻+${status.attackUp * STATUS_BONUS_VALUE.attackUp}`,
+                className: styles.statusAttack
+            })
+        }
+        if (status.defenseUp > 0) {
+            badges.push({
+                key: 'defenseUp',
+                label: `防+${status.defenseUp * STATUS_BONUS_VALUE.defenseUp}`,
+                className: styles.statusDefense
+            })
+        }
+        if (badges.length === 0) return null
+        return (
+            <div className={styles.statusBadges}>
+                {badges.map(badge => (
+                    <span key={badge.key} className={`${styles.statusBadge} ${badge.className}`}>
+                        {badge.label}
+                    </span>
+                ))}
+            </div>
+        )
     }
 
     // ====== プレイヤー並び ======
@@ -704,6 +747,7 @@ export default function Game() {
                                 styles.playerCard,
                                 styles.myPlayerCard,
                                 player === st.turn ? styles.cardIsTurn : '',
+                                (st.status[player]?.paralyze ?? 0) > 0 ? styles.cardParalyzed : '',
                                 defenseTarget === player ? styles.cardIsTarget : '',
                                 canSelectTarget && hp > 0 ? styles.cardSelectable : '',
                                 selectedTarget === player ? styles.cardSelected : ''
@@ -721,13 +765,16 @@ export default function Game() {
                                     aria-pressed={canSelectTarget && selectedTarget === player}
                                 >
                                     <div className={styles.playerHeader}>
-                                        <p className={styles.playerName}>
-                                            {player}
-                                        </p>
-                                        <div className={styles.hpRow}>
-                                            {/* {player === st.turn && <span className={styles.turnBadge}>現在のターン</span>} */}
-                                            <span className={styles.hpValue}>HP {hp}</span>
+                                        <div className={styles.playerTitleRow}>
+                                            <p className={styles.playerName}>
+                                                {player}
+                                            </p>
+                                            <div className={styles.hpRow}>
+                                                {/* {player === st.turn && <span className={styles.turnBadge}>現在のターン</span>} */}
+                                                <span className={styles.hpValue}>HP {hp}</span>
+                                            </div>
                                         </div>
+                                        {renderStatusBadges(player)}
                                     </div>
                                     <div className={styles.hpBarTrack}>
                                         <div className={`${styles.hpBar} ${hpBarClass(player)}`} style={{ width: `${hpPercent(player)}%` }} />
@@ -740,14 +787,15 @@ export default function Game() {
                         {playersToDisplay.map(player => {
                             const hp = st.hp[player] ?? 0
                             if (player !== name) {
-                                const classes = [
-                                    styles.playerCard,
-                                    styles.enemyPlayerCard,
-                                    player === st.turn ? styles.cardIsTurn : '',
-                                    player === name ? styles.cardIsSelf : '',
-                                    defenseTarget === player ? styles.cardIsTarget : '',
-                                    canSelectTarget && hp > 0 ? styles.cardSelectable : '',
-                                    selectedTarget === player ? styles.cardSelected : ''
+                            const classes = [
+                                styles.playerCard,
+                                styles.enemyPlayerCard,
+                                player === st.turn ? styles.cardIsTurn : '',
+                                player === name ? styles.cardIsSelf : '',
+                                (st.status[player]?.paralyze ?? 0) > 0 ? styles.cardParalyzed : '',
+                                defenseTarget === player ? styles.cardIsTarget : '',
+                                canSelectTarget && hp > 0 ? styles.cardSelectable : '',
+                                selectedTarget === player ? styles.cardSelected : ''
                                 ].join(' ').trim()
                                 return (
                                     <div
@@ -761,7 +809,8 @@ export default function Game() {
                                         role={canSelectTarget && hp > 0 ? 'button' : undefined}
                                         aria-pressed={canSelectTarget && selectedTarget === player}
                                     >
-                                        <div className={styles.playerHeader}>
+                                    <div className={styles.playerHeader}>
+                                        <div className={styles.playerTitleRow}>
                                             <p className={styles.playerName}>
                                                 {player}
                                             </p>
@@ -770,6 +819,8 @@ export default function Game() {
                                                 <span className={styles.hpValue}>HP {hp}</span>
                                             </div>
                                         </div>
+                                        {renderStatusBadges(player)}
+                                    </div>
                                         <div className={styles.hpBarTrack}>
                                         <div className={`${styles.hpBar} ${hpBarClass(player)}`} style={{ width: `${hpPercent(player)}%` }} />
                                     </div>
@@ -786,13 +837,15 @@ export default function Game() {
                             const meta: CardMeta | undefined = aiCardMap[cardId] ?? CARD_LIBRARY[cardId]
                             if (!meta) return null
                             const perCardCategoryClass = categoryClass[meta.category] ?? ''
-                            const usable = (isAiCard(cardId) ? !aiCardUsed : true) && (meta.category === 'defense'
+                            const usable = !isParalyzed
+                                && (isAiCard(cardId) ? !aiCardUsed : true)
+                                && (meta.category === 'defense'
                                     ? isDefenseTurn
                                     : canPlayAttackCard)
                             return (
                                 <button
                                     key={`${cardId}-${idx}`}
-                                    className={`${styles.cardToken} ${selectedCardIndex === idx ? styles.cardTokenSelected : ''} ${perCardCategoryClass}`}
+                                    className={`${styles.cardToken} ${selectedCardIndex === idx ? styles.cardTokenSelected : ''} ${perCardCategoryClass} ${isParalyzed ? styles.cardParalyzed : ''}`}
                                     disabled={!usable}
                                     onClick={() => {
                                         if (!usable) return
