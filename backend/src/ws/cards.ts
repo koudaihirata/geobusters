@@ -12,16 +12,19 @@ export const ATTACK_CARDS: Record<number, AttackCardEffect> = {
     101: { damage: 1 },
     102: { damage: 3 },
     103: { damage: 1, statusEffect: { status: 'poison', amount: 1 } },
-    104: { damage: 1, statusEffect: { status: 'paralyze', amount: 1 } }
+    104: { damage: 1, statusEffect: { status: 'paralyze', amount: 1 } },
+    105: { damage: 6 }
 }
 
 export const DEFENSE_CARDS: Record<number, number> = {
     201: 1,
-    202: 3
+    202: 3,
+    203: 6
 }
 
 export const HEAL_CARDS: Record<number, number> = {
-    301: 2
+    301: 1,
+    302: 3
 }
 
 export const isAttackCard = (id: number) => id in ATTACK_CARDS
