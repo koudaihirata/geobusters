@@ -9,14 +9,16 @@ import SelectedCard from '../../components/SelectedCard'
 import { resolveCardImgSrc } from '../../utils/resolveCardImg'
 
 // ====== 型定義 ======
+type StatusEffects = { poison: number; paralyze: number; attackUp: number; defenseUp: number }
 type S = {
     players: string[]
     hp: Record<string, number>
+    status: Record<string, StatusEffects>
     round: number
     turn: string
 }
 // 初期状態
-const initS: S = { players:[], hp:{}, round:1, turn:'' }
+const initS: S = { players:[], hp:{}, status:{}, round:1, turn:'' }
 // HP の上限
 const MAX_HP = 10
 // clientId 保管キー
@@ -28,9 +30,9 @@ type AiCardMsg = { type: 'ai_card'; card_id: number; spot: string; card_effect: 
 
 // ====== WS メッセージ型 ======
 type DefenseSnapshot = { attacker: string; target: string; damage: number; cardId?: number; defenseCardId?: number }
-type GameStartedMsg = { type: 'game_started'; players?: string[]; hp?: Record<string, number>; round?: number; turn?: string }
-type StateMsg = { type: 'state'; hp?: Record<string, number>; round?: number; turn?: string; phase?: 'action' | 'defense'; defense?: DefenseSnapshot }
-type PlayedMsg = { type: 'played'; by?: string; cardId?: number; target?: string; delta?: { hp?: Record<string, number> }; next?: { round?: number; turn?: string }; defense?: { by: string; cardId?: number; blocked: number; cards?: number[] } }
+type GameStartedMsg = { type: 'game_started'; players?: string[]; hp?: Record<string, number>; status?: Record<string, StatusEffects>; round?: number; turn?: string }
+type StateMsg = { type: 'state'; hp?: Record<string, number>; status?: Record<string, StatusEffects>; round?: number; turn?: string; phase?: 'action' | 'defense'; defense?: DefenseSnapshot }
+type PlayedMsg = { type: 'played'; by?: string; cardId?: number; target?: string; delta?: { hp?: Record<string, number> }; status?: Record<string, StatusEffects>; next?: { round?: number; turn?: string }; defense?: { by: string; cardId?: number; blocked: number; cards?: number[] } }
 type GameOverMsg = { type: 'game_over'; winner?: string }
 type PhaseChangedMsg = { type: 'phase_changed'; phase: 'lobby' | 'game' }
 type DefenseRequestedMsg = { type: 'defense_requested'; attacker: string; target: string; damage: number; cardId: number; defenseCardId?: number }
@@ -192,6 +194,7 @@ export default function Game() {
                         setSt({
                             players: typedMsg.players ?? [],
                             hp: typedMsg.hp ?? {},
+                            status: typedMsg.status ?? {},
                             round: typedMsg.round ?? 1,
                             turn: typedMsg.turn ?? ''
                         })
@@ -213,6 +216,7 @@ export default function Game() {
                                 ...prev,
                                 players,
                                 hp,
+                                status: typedMsg.status ?? prev.status,
                                 round: typedMsg.round ?? prev.round,
                                 turn: typedMsg.turn ?? prev.turn
                             }
@@ -242,6 +246,7 @@ export default function Game() {
                                 ...prev,
                                 players,
                                 hp: nextHp,
+                                status: typedMsg.status ?? prev.status,
                                 round: typedMsg.next?.round ?? prev.round,
                                 turn: typedMsg.next?.turn ?? prev.turn
                             }
@@ -498,6 +503,29 @@ export default function Game() {
         return styles.hpFull
     }
 
+    const resolveStatus = (player: string): StatusEffects => (
+        st.status[player] ?? { poison: 0, paralyze: 0, attackUp: 0, defenseUp: 0 }
+    )
+
+    const renderStatusBadges = (player: string) => {
+        const status = resolveStatus(player)
+        const badges: Array<{ key: string; label: string; className: string }> = []
+        if (status.poison > 0) badges.push({ key: 'poison', label: `毒${status.poison}`, className: styles.statusPoison })
+        if (status.paralyze > 0) badges.push({ key: 'paralyze', label: `まひ${status.paralyze}`, className: styles.statusParalyze })
+        if (status.attackUp > 0) badges.push({ key: 'attackUp', label: `攻+${status.attackUp}`, className: styles.statusAttack })
+        if (status.defenseUp > 0) badges.push({ key: 'defenseUp', label: `防+${status.defenseUp}`, className: styles.statusDefense })
+        if (badges.length === 0) return null
+        return (
+            <div className={styles.statusBadges}>
+                {badges.map(badge => (
+                    <span key={badge.key} className={`${styles.statusBadge} ${badge.className}`}>
+                        {badge.label}
+                    </span>
+                ))}
+            </div>
+        )
+    }
+
     // ====== プレイヤー並び ======
     const playersToDisplay = (() => {
         const ordered = st.players.length ? [...st.players] : [...Object.keys(st.hp)]
@@ -721,13 +749,16 @@ export default function Game() {
                                     aria-pressed={canSelectTarget && selectedTarget === player}
                                 >
                                     <div className={styles.playerHeader}>
-                                        <p className={styles.playerName}>
-                                            {player}
-                                        </p>
-                                        <div className={styles.hpRow}>
-                                            {/* {player === st.turn && <span className={styles.turnBadge}>現在のターン</span>} */}
-                                            <span className={styles.hpValue}>HP {hp}</span>
+                                        <div className={styles.playerTitleRow}>
+                                            <p className={styles.playerName}>
+                                                {player}
+                                            </p>
+                                            <div className={styles.hpRow}>
+                                                {/* {player === st.turn && <span className={styles.turnBadge}>現在のターン</span>} */}
+                                                <span className={styles.hpValue}>HP {hp}</span>
+                                            </div>
                                         </div>
+                                        {renderStatusBadges(player)}
                                     </div>
                                     <div className={styles.hpBarTrack}>
                                         <div className={`${styles.hpBar} ${hpBarClass(player)}`} style={{ width: `${hpPercent(player)}%` }} />
@@ -761,7 +792,8 @@ export default function Game() {
                                         role={canSelectTarget && hp > 0 ? 'button' : undefined}
                                         aria-pressed={canSelectTarget && selectedTarget === player}
                                     >
-                                        <div className={styles.playerHeader}>
+                                    <div className={styles.playerHeader}>
+                                        <div className={styles.playerTitleRow}>
                                             <p className={styles.playerName}>
                                                 {player}
                                             </p>
@@ -770,6 +802,8 @@ export default function Game() {
                                                 <span className={styles.hpValue}>HP {hp}</span>
                                             </div>
                                         </div>
+                                        {renderStatusBadges(player)}
+                                    </div>
                                         <div className={styles.hpBarTrack}>
                                         <div className={`${styles.hpBar} ${hpBarClass(player)}`} style={{ width: `${hpPercent(player)}%` }} />
                                     </div>

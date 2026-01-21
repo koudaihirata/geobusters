@@ -1,6 +1,6 @@
 // src/ws/game.ts
 import type { Client } from '../types'
-import { getAttackDamage, getDefenseValue, getHealValue, isAttackCard, isDefenseCard, isHealCard } from './cards'
+import { getAttackDamage, getDefenseValue, getHealValue, getSpecialCardEffect, isAttackCard, isDefenseCard, isHealCard, isSpecialCard } from './cards'
 
 export type GameDeps = {
     send: (ws: Client, obj: unknown) => void
@@ -28,6 +28,7 @@ export type GameState = {
     started: boolean
     players: string[]
     hp: Map<string, number>
+    status: Map<string, StatusEffects>
     round: number
     turnIdx: number
     deck: Record<string, number[]>
@@ -40,11 +41,29 @@ export type GameState = {
     aiCardUsed: Set<string>
 }
 
+export type StatusEffects = {
+    poison: number
+    paralyze: number
+    attackUp: number
+    defenseUp: number
+}
+
+const EMPTY_STATUS: StatusEffects = {
+    poison: 0,
+    paralyze: 0,
+    attackUp: 0,
+    defenseUp: 0
+}
+
+const ATTACK_UP_BONUS = 2
+const DEFENSE_UP_BONUS = 2
+
 export class GameEngine {
     state: GameState = {
         started: false,
         players: [],
         hp: new Map(),
+        status: new Map(),
         round: 1,
         turnIdx: 0,
         deck: {},
@@ -83,7 +102,7 @@ export class GameEngine {
     }
 
     buildDeck() {
-        const ids = [101,101,102,102,201,202,301,301]
+        const ids = [101,101,102,102,201,202,301,301,401,402,403,404]
         for (let i = ids.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1))
             ;[ids[i], ids[j]] = [ids[j], ids[i]]
@@ -158,6 +177,7 @@ export class GameEngine {
         this.state.started = true
         this.state.players = players
         this.state.hp = new Map(players.map(n => [n, 10]))
+        this.state.status = new Map(players.map(n => [n, { ...EMPTY_STATUS }]))
         this.state.round = 1
         this.state.turnIdx = 0
         this.state.deck = {}
@@ -173,12 +193,13 @@ export class GameEngine {
         this.state.phase = 'action'
         this.state.pendingDefense = undefined
         deps.broadcast({
-        type: 'game_started',
-        players: this.state.players,
-        hp: Object.fromEntries(this.state.hp),
-        round: this.state.round,
-        turn: this.currentTurnName(),
-        deckVer: this.state.deckVer,
+            type: 'game_started',
+            players: this.state.players,
+            hp: Object.fromEntries(this.state.hp),
+            status: this.statusSnapshot(),
+            round: this.state.round,
+            turn: this.currentTurnName(),
+            deckVer: this.state.deckVer,
         })
         for (const player of players) {
             this.sendHandSnapshot(deps, player)
@@ -190,6 +211,7 @@ export class GameEngine {
             deps.send(ws, {
                 type: 'state',
                 hp: Object.fromEntries(this.state.hp),
+                status: this.statusSnapshot(),
                 round: this.state.round,
                 turn: this.currentTurnName(),
                 phase: this.state.phase,
@@ -221,10 +243,12 @@ export class GameEngine {
             }
             if (!this.state.started) return
             if (actor !== this.currentTurnName()) return
-            this.advanceTurnFrom(actor)
+            const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
+            if (nextInfo === 'game_over') return 'game_over'
             deps.broadcast({
                 type:'state',
                 hp: Object.fromEntries(this.state.hp),
+                status: this.statusSnapshot(),
                 round: this.state.round,
                 turn: this.currentTurnName(),
                 phase: this.state.phase,
@@ -264,7 +288,7 @@ export class GameEngine {
             if (aiMeta.category === 'attack') {
                 const targetName = this.resolveTarget(actor, target)
                 if (!targetName) { deps.send(ws, { type:'error', text:'攻撃可能なターゲットがいません' }); return }
-                const damage = aiMeta.value
+                const damage = aiMeta.value + this.consumeAttackBonus(actor)
                 deps.revealAiCard(actor, cardId)
                 deps.broadcast({
                     type: 'replay',
@@ -295,19 +319,51 @@ export class GameEngine {
                 this.state.hp.set(targetName, cur + healValue)
                 deps.revealAiCard(actor, cardId)
                 this.state.aiCardUsed.add(actor)
-                const nextInfo = this.advanceTurnInfo(actor)
+                const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
+                if (nextInfo === 'game_over') return 'game_over'
                 deps.broadcast({
                     type:'played',
                     by: actor,
                     cardId,
                     target: targetName,
                     delta:{ hp: { [targetName]: healValue } },
+                    status: this.statusSnapshot(),
                     next: nextInfo
                 })
                 return
             }
 
             deps.send(ws, { type:'error', text:'防御AIカードは防御ターンでのみ使用できます' })
+            return
+        }
+
+        /* 特殊カード */
+        if (isSpecialCard(cardId)) {
+            if (!this.useCard(deps, actor, cardId)) return
+            const effect = getSpecialCardEffect(cardId)
+            if (!effect) {
+                deps.send(ws, { type:'error', text:`未知の特殊カード: ${cardId}` })
+                return
+            }
+            const targetName = effect.target === 'self'
+                ? actor
+                : this.resolveTarget(actor, target)
+            if (!targetName) {
+                deps.send(ws, { type:'error', text:'対象が見つかりません' })
+                return
+            }
+            this.applyStatus(targetName, effect.status, effect.amount)
+            const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
+            if (nextInfo === 'game_over') return 'game_over'
+            deps.broadcast({
+                type:'played',
+                by: actor,
+                cardId,
+                target: targetName,
+                delta:{ hp: {} },
+                status: this.statusSnapshot(),
+                next: nextInfo
+            })
             return
         }
 
@@ -322,22 +378,23 @@ export class GameEngine {
                 return
             }
 
+            const totalDamage = damage + this.consumeAttackBonus(actor)
             deps.broadcast({
                 type: 'replay',
                 stage: 'attack',
                 attacker: actor,
                 target: targetName,
                 cardId,
-                value: damage
+                value: totalDamage
             })
 
-            this.state.pendingDefense = { attacker: actor, target: targetName, cardId, damage, totalDamage: damage, blocked: 0, cardsUsed: [], lastDefenseCardId: undefined }
+            this.state.pendingDefense = { attacker: actor, target: targetName, cardId, damage: totalDamage, totalDamage: totalDamage, blocked: 0, cardsUsed: [], lastDefenseCardId: undefined }
             this.state.phase = 'defense'
             deps.broadcast({
                 type: 'defense_requested',
                 attacker: actor,
                 target: targetName,
-                damage,
+                damage: totalDamage,
                 cardId,
                 defenseCardId: undefined
             })
@@ -356,13 +413,15 @@ export class GameEngine {
             const targetName = target ?? actor
             const cur = this.state.hp.get(targetName) ?? 0
             this.state.hp.set(targetName, cur + healValue)
-            const nextInfo = this.advanceTurnInfo(actor)
+            const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
+            if (nextInfo === 'game_over') return 'game_over'
             deps.broadcast({
                 type:'played',
                 by: actor,
                 cardId,
                 target: targetName,
                 delta:{ hp: { [targetName]: healValue } },
+                status: this.statusSnapshot(),
                 next: nextInfo
             })
             return
@@ -403,7 +462,7 @@ export class GameEngine {
                 return
             }
 
-            const defenseValue = aiMeta.value
+            const defenseValue = aiMeta.value + this.consumeDefenseBonus(actor)
             deps.broadcast({
                 type: 'replay',
                 stage: 'defense',
@@ -432,16 +491,17 @@ export class GameEngine {
             return
         }
 
+        const totalDefense = defenseValue + this.consumeDefenseBonus(actor)
         deps.broadcast({
             type: 'replay',
             stage: 'defense',
             defender: actor,
             cardId: parsed.cardId,
-            value: defenseValue
+            value: totalDefense
         })
 
-        pending.damage = Math.max(0, pending.damage - defenseValue)
-        pending.blocked += defenseValue
+        pending.damage = Math.max(0, pending.damage - totalDefense)
+        pending.blocked += totalDefense
         pending.cardsUsed.push(parsed.cardId)
         pending.lastDefenseCardId = parsed.cardId
 
@@ -475,8 +535,8 @@ export class GameEngine {
             return
         }
 
-        this.advanceTurnFrom(pending.attacker)
-        const nextInfo = { round: this.state.round, turn: this.currentTurnName() }
+        const nextInfo = this.advanceTurnInfoWithStatus(deps, pending.attacker)
+        if (nextInfo === 'game_over') return 'game_over'
 
         deps.broadcast({
             type:'played',
@@ -484,6 +544,7 @@ export class GameEngine {
             cardId: pending.cardId,
             target: pending.target,
             delta:{ hp: delta },
+            status: this.statusSnapshot(),
             next: nextInfo,
             defense: {
                 by: pending.target,
@@ -500,9 +561,112 @@ export class GameEngine {
         }
     }
 
-    private advanceTurnInfo(actor: string) {
-        this.advanceTurnFrom(actor)
-        return { round: this.state.round, turn: this.currentTurnName() }
+    private advanceTurnInfoWithStatus(deps: GameDeps, actor: string): { round: number; turn: string } | 'game_over' {
+        let nextActor = actor
+        const visited = new Set<string>()
+        while (true) {
+            this.advanceTurnFrom(nextActor)
+            const current = this.currentTurnName()
+            if (!current || visited.has(current)) {
+                return { round: this.state.round, turn: this.currentTurnName() }
+            }
+            visited.add(current)
+            const { skipped, statusChanged } = this.applyStartOfTurnEffects(deps, current)
+            const alive = this.removeDefeatedPlayers()
+            if (this.state.players.length === 0) {
+                this.state.started = false
+                return 'game_over'
+            }
+            if (alive.length === 1) {
+                deps.broadcast({ type:'game_over', winner: alive[0] })
+                this.state.started = false
+                return 'game_over'
+            }
+            if (statusChanged) {
+                deps.broadcast({
+                    type:'state',
+                    hp: Object.fromEntries(this.state.hp),
+                    status: this.statusSnapshot(),
+                    round: this.state.round,
+                    turn: this.currentTurnName(),
+                    phase: this.state.phase,
+                    defense: this.state.pendingDefense ? {
+                        attacker: this.state.pendingDefense.attacker,
+                        target: this.state.pendingDefense.target,
+                        damage: this.state.pendingDefense.damage,
+                        cardId: this.state.pendingDefense.cardId,
+                        defenseCardId: this.state.pendingDefense.lastDefenseCardId
+                    } : undefined
+                })
+            }
+            if (!skipped) {
+                return { round: this.state.round, turn: this.currentTurnName() }
+            }
+            nextActor = current
+        }
+    }
+
+    private statusSnapshot(): Record<string, StatusEffects> {
+        const entries = Array.from(this.state.status.entries()).map(([player, status]) => [player, { ...status }])
+        return Object.fromEntries(entries)
+    }
+
+    private ensureStatus(player: string): StatusEffects {
+        const existing = this.state.status.get(player)
+        if (existing) return existing
+        const next = { ...EMPTY_STATUS }
+        this.state.status.set(player, next)
+        return next
+    }
+
+    private applyStatus(player: string, status: keyof StatusEffects, amount: number) {
+        const current = this.ensureStatus(player)
+        current[status] = Math.max(0, current[status] + amount)
+        this.state.status.set(player, current)
+    }
+
+    private consumeAttackBonus(player: string) {
+        const current = this.ensureStatus(player)
+        if (current.attackUp <= 0) return 0
+        current.attackUp = Math.max(0, current.attackUp - 1)
+        this.state.status.set(player, current)
+        return ATTACK_UP_BONUS
+    }
+
+    private consumeDefenseBonus(player: string) {
+        const current = this.ensureStatus(player)
+        if (current.defenseUp <= 0) return 0
+        current.defenseUp = Math.max(0, current.defenseUp - 1)
+        this.state.status.set(player, current)
+        return DEFENSE_UP_BONUS
+    }
+
+    private applyStartOfTurnEffects(deps: GameDeps, player: string) {
+        const current = this.ensureStatus(player)
+        let statusChanged = false
+
+        if (current.poison > 0) {
+            const curHp = this.state.hp.get(player) ?? 0
+            this.state.hp.set(player, Math.max(0, curHp - 1))
+            current.poison = Math.max(0, current.poison - 1)
+            statusChanged = true
+            deps.broadcast({
+                type: 'replay',
+                stage: 'damage',
+                target: player,
+                amount: 1
+            })
+        }
+
+        let skipped = false
+        if (current.paralyze > 0) {
+            current.paralyze = Math.max(0, current.paralyze - 1)
+            statusChanged = true
+            skipped = true
+        }
+
+        this.state.status.set(player, current)
+        return { skipped, statusChanged }
     }
 
     private resolveTarget(actor: string, target?: string): string | null {
@@ -549,10 +713,12 @@ export class GameEngine {
             at: Date.now()
         })
 
-        this.advanceTurnFrom(actor)
+        const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
+        if (nextInfo === 'game_over') return
         deps.broadcast({
             type:'state',
             hp: Object.fromEntries(this.state.hp),
+            status: this.statusSnapshot(),
             round: this.state.round,
             turn: this.currentTurnName(),
             phase: this.state.phase

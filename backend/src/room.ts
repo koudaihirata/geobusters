@@ -198,6 +198,7 @@ export class Room {
       this.send(server, {
         type:'state',
         hp: Object.fromEntries(this.game.state.hp),
+        status: Object.fromEntries(this.game.state.status),
         round: this.game.state.round,
         turn: this.game.currentTurnName(),
       })
