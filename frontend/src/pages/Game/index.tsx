@@ -115,6 +115,7 @@ export default function Game() {
     const isDefenseTurn = phase === 'defense' && defensePrompt?.target === name
     const canPlayAttackCard = phase === 'action' && isMyTurn
     const canSelectTarget = phase === 'action'
+    const isParalyzed = (st.status[name]?.paralyze ?? 0) > 0
     // プレイログの表示用
     const [playView, setPlayView] = useState<SharedPlayView>({ attacker: null, attackCardId: null, target: null, defenseCardId: null })
     const [replayStage, setReplayStage] = useState<'attack' | 'defense' | 'damage' | null>(null)
@@ -746,6 +747,7 @@ export default function Game() {
                                 styles.playerCard,
                                 styles.myPlayerCard,
                                 player === st.turn ? styles.cardIsTurn : '',
+                                (st.status[player]?.paralyze ?? 0) > 0 ? styles.cardParalyzed : '',
                                 defenseTarget === player ? styles.cardIsTarget : '',
                                 canSelectTarget && hp > 0 ? styles.cardSelectable : '',
                                 selectedTarget === player ? styles.cardSelected : ''
@@ -785,14 +787,15 @@ export default function Game() {
                         {playersToDisplay.map(player => {
                             const hp = st.hp[player] ?? 0
                             if (player !== name) {
-                                const classes = [
-                                    styles.playerCard,
-                                    styles.enemyPlayerCard,
-                                    player === st.turn ? styles.cardIsTurn : '',
-                                    player === name ? styles.cardIsSelf : '',
-                                    defenseTarget === player ? styles.cardIsTarget : '',
-                                    canSelectTarget && hp > 0 ? styles.cardSelectable : '',
-                                    selectedTarget === player ? styles.cardSelected : ''
+                            const classes = [
+                                styles.playerCard,
+                                styles.enemyPlayerCard,
+                                player === st.turn ? styles.cardIsTurn : '',
+                                player === name ? styles.cardIsSelf : '',
+                                (st.status[player]?.paralyze ?? 0) > 0 ? styles.cardParalyzed : '',
+                                defenseTarget === player ? styles.cardIsTarget : '',
+                                canSelectTarget && hp > 0 ? styles.cardSelectable : '',
+                                selectedTarget === player ? styles.cardSelected : ''
                                 ].join(' ').trim()
                                 return (
                                     <div
@@ -834,13 +837,15 @@ export default function Game() {
                             const meta: CardMeta | undefined = aiCardMap[cardId] ?? CARD_LIBRARY[cardId]
                             if (!meta) return null
                             const perCardCategoryClass = categoryClass[meta.category] ?? ''
-                            const usable = (isAiCard(cardId) ? !aiCardUsed : true) && (meta.category === 'defense'
+                            const usable = !isParalyzed
+                                && (isAiCard(cardId) ? !aiCardUsed : true)
+                                && (meta.category === 'defense'
                                     ? isDefenseTurn
                                     : canPlayAttackCard)
                             return (
                                 <button
                                     key={`${cardId}-${idx}`}
-                                    className={`${styles.cardToken} ${selectedCardIndex === idx ? styles.cardTokenSelected : ''} ${perCardCategoryClass}`}
+                                    className={`${styles.cardToken} ${selectedCardIndex === idx ? styles.cardTokenSelected : ''} ${perCardCategoryClass} ${isParalyzed ? styles.cardParalyzed : ''}`}
                                     disabled={!usable}
                                     onClick={() => {
                                         if (!usable) return
@@ -866,7 +871,7 @@ export default function Game() {
                 <div className={`${styles.cardButtons} ${playersToDisplay.length <= 4 ? styles.btnStyleAdjustment : ''}`}>
                     <NormalBtn 
                         label={selectedCardIndex !== null ? '行動決定' : phase === 'defense' ? '防御しない' : 'ターンエンド'}
-                        disabled={phase === 'defense' ? !isDefenseTurn : !canPlayAttackCard}
+                        disabled={isParalyzed || (phase === 'defense' ? !isDefenseTurn : !canPlayAttackCard)}
                         onClick={commitAction}
                     /> 
                 </div>

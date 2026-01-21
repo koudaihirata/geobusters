@@ -204,6 +204,12 @@
   box-shadow: 0 0 0 3px rgba(245, 101, 101, 0.35);
 }
 
+.cardParalyzed {
+  border-color: #ecc94b;
+  box-shadow: 0 0 0 3px rgba(236, 201, 75, 0.35);
+  background: rgba(236, 201, 75, 0.12);
+}
+
 .playerHeader {
   display: flex;
   flex-direction: column;
