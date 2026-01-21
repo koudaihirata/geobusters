@@ -29,7 +29,6 @@ export type GameState = {
     players: string[]
     hp: Map<string, number>
     status: Map<string, StatusEffects>
-    paralyzedPlayer: string | null
     round: number
     turnIdx: number
     deck: Record<string, number[]>
@@ -65,7 +64,6 @@ export class GameEngine {
         players: [],
         hp: new Map(),
         status: new Map(),
-        paralyzedPlayer: null,
         round: 1,
         turnIdx: 0,
         deck: {},
@@ -180,7 +178,6 @@ export class GameEngine {
         this.state.players = players
         this.state.hp = new Map(players.map(n => [n, 10]))
         this.state.status = new Map(players.map(n => [n, { ...EMPTY_STATUS }]))
-        this.state.paralyzedPlayer = null
         this.state.round = 1
         this.state.turnIdx = 0
         this.state.deck = {}
@@ -246,6 +243,7 @@ export class GameEngine {
             }
             if (!this.state.started) return
             if (actor !== this.currentTurnName()) return
+            this.consumeParalyzeTurn(actor)
             const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
             if (nextInfo === 'game_over') return 'game_over'
             deps.broadcast({
@@ -323,6 +321,7 @@ export class GameEngine {
                 this.state.hp.set(targetName, cur + healValue)
                 deps.revealAiCard(actor, cardId)
                 this.state.aiCardUsed.add(actor)
+                this.consumeParalyzeTurn(actor)
                 const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
                 if (nextInfo === 'game_over') return 'game_over'
                 deps.broadcast({
@@ -357,6 +356,7 @@ export class GameEngine {
                 return
             }
             this.applyStatus(targetName, effect.status, effect.amount)
+            this.consumeParalyzeTurn(actor)
             const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
             if (nextInfo === 'game_over') return 'game_over'
             deps.broadcast({
@@ -417,6 +417,7 @@ export class GameEngine {
             const targetName = target ?? actor
             const cur = this.state.hp.get(targetName) ?? 0
             this.state.hp.set(targetName, cur + healValue)
+            this.consumeParalyzeTurn(actor)
             const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
             if (nextInfo === 'game_over') return 'game_over'
             deps.broadcast({
@@ -536,6 +537,7 @@ export class GameEngine {
         }
         this.state.pendingDefense = undefined
         this.state.phase = 'action'
+        this.consumeParalyzeTurn(pending.target)
 
         const alive = this.removeDefeatedPlayers()
         if (this.state.players.length === 0) {
@@ -650,8 +652,6 @@ export class GameEngine {
         const current = this.ensureStatus(player)
         let statusChanged = false
 
-        this.state.paralyzedPlayer = null
-
         if (current.poison > 0) {
             const curHp = this.state.hp.get(player) ?? 0
             this.state.hp.set(player, Math.max(0, curHp - 1))
@@ -665,20 +665,20 @@ export class GameEngine {
             })
         }
 
-        if (current.paralyze > 0) {
-            current.paralyze = Math.max(0, current.paralyze - 1)
-            statusChanged = true
-            this.state.paralyzedPlayer = player
-        }
-
         this.state.status.set(player, current)
         return { statusChanged }
     }
 
     private isParalyzed(player: string) {
         const current = this.ensureStatus(player)
-        if (current.paralyze > 0) return true
-        return this.state.paralyzedPlayer === player
+        return current.paralyze > 0
+    }
+
+    private consumeParalyzeTurn(player: string) {
+        const current = this.ensureStatus(player)
+        if (current.paralyze <= 0) return
+        current.paralyze = Math.max(0, current.paralyze - 1)
+        this.state.status.set(player, current)
     }
 
     private resolveTarget(actor: string, target?: string): string | null {
