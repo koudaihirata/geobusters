@@ -519,8 +519,11 @@ export class GameEngine {
         this.state.phase = 'action'
         this.consumeStatusTurn(pending.target)
 
-        if (pending.statusEffect) {
-            this.applyStatus(pending.target, pending.statusEffect.status, pending.statusEffect.amount)
+        if (pending.statusEffect && netDamage > 0) {
+            const remainingHp = this.state.hp.get(pending.target) ?? 0
+            if (remainingHp > 0) {
+                this.applyStatus(pending.target, pending.statusEffect.status, pending.statusEffect.amount)
+            }
         }
         const alive = this.removeDefeatedPlayers()
         if (this.state.players.length === 0) {
