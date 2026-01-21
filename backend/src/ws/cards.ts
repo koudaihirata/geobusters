@@ -17,13 +17,14 @@ export type SpecialCardEffect = {
     status: StatusKey
     amount: number
     target: 'self' | 'enemy'
+    value?: number
 }
 
 export const SPECIAL_CARDS: Record<number, SpecialCardEffect> = {
     401: { status: 'poison', amount: 2, target: 'enemy' },
     402: { status: 'paralyze', amount: 1, target: 'enemy' },
-    403: { status: 'attackUp', amount: 1, target: 'self' },
-    404: { status: 'defenseUp', amount: 1, target: 'self' }
+    403: { status: 'attackUp', amount: 1, target: 'self', value: 2 },
+    404: { status: 'defenseUp', amount: 1, target: 'self', value: 2 }
 }
 
 export const isAttackCard = (id: number) => id in ATTACK_CARDS

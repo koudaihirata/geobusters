@@ -9,6 +9,11 @@ export type CardMeta = {
     img: string
 }
 
+export const STATUS_BONUS_VALUE = {
+    attackUp: 2,
+    defenseUp: 2
+}
+
 export const CARD_LIBRARY: Record<number, CardMeta> = {
     /* 攻撃カード */
     101: { id: 101, label: '木の剣', detail: '1ダメージを与える', category: 'attack', requiresTarget: true, allowSelfTarget: true, img: 'cards/woodenSword' },

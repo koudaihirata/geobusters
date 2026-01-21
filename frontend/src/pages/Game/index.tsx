@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { baseURL } from '../../utils/baseURL'
 import styles from './styles.module.css'
-import { CARD_LIBRARY, type CardCategory, type CardMeta } from '../../utils/cards'
+import { CARD_LIBRARY, STATUS_BONUS_VALUE, type CardCategory, type CardMeta } from '../../utils/cards'
 import NormalBtn from '../../components/button/NormalBtn'
 import { stringToJson } from '../../utils/stringToJson'
 import SelectedCard from '../../components/SelectedCard'
@@ -419,6 +419,8 @@ export default function Game() {
                     targetChoice = name
                 } else if (meta?.category === 'attack') {
                     targetChoice = defaultAttackTarget(name)
+                } else if (meta?.category === 'special') {
+                    targetChoice = meta.allowSelfTarget ? name : defaultAttackTarget(name)
                 } else if (meta?.allowSelfTarget) {
                     targetChoice = name
                 }
@@ -512,8 +514,20 @@ export default function Game() {
         const badges: Array<{ key: string; label: string; className: string }> = []
         if (status.poison > 0) badges.push({ key: 'poison', label: `毒${status.poison}`, className: styles.statusPoison })
         if (status.paralyze > 0) badges.push({ key: 'paralyze', label: `まひ${status.paralyze}`, className: styles.statusParalyze })
-        if (status.attackUp > 0) badges.push({ key: 'attackUp', label: `攻+${status.attackUp}`, className: styles.statusAttack })
-        if (status.defenseUp > 0) badges.push({ key: 'defenseUp', label: `防+${status.defenseUp}`, className: styles.statusDefense })
+        if (status.attackUp > 0) {
+            badges.push({
+                key: 'attackUp',
+                label: `攻+${status.attackUp * STATUS_BONUS_VALUE.attackUp}`,
+                className: styles.statusAttack
+            })
+        }
+        if (status.defenseUp > 0) {
+            badges.push({
+                key: 'defenseUp',
+                label: `防+${status.defenseUp * STATUS_BONUS_VALUE.defenseUp}`,
+                className: styles.statusDefense
+            })
+        }
         if (badges.length === 0) return null
         return (
             <div className={styles.statusBadges}>

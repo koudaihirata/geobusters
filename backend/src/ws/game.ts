@@ -29,6 +29,7 @@ export type GameState = {
     players: string[]
     hp: Map<string, number>
     status: Map<string, StatusEffects>
+    paralyzedPlayer: string | null
     round: number
     turnIdx: number
     deck: Record<string, number[]>
@@ -64,6 +65,7 @@ export class GameEngine {
         players: [],
         hp: new Map(),
         status: new Map(),
+        paralyzedPlayer: null,
         round: 1,
         turnIdx: 0,
         deck: {},
@@ -178,6 +180,7 @@ export class GameEngine {
         this.state.players = players
         this.state.hp = new Map(players.map(n => [n, 10]))
         this.state.status = new Map(players.map(n => [n, { ...EMPTY_STATUS }]))
+        this.state.paralyzedPlayer = null
         this.state.round = 1
         this.state.turnIdx = 0
         this.state.deck = {}
@@ -276,6 +279,7 @@ export class GameEngine {
     private handleActionPlay(deps: GameDeps, ws: Client, actor: string, parsed: { cardId: number; target?: string }): 'game_over' | void {
         if (!this.state.started) { deps.send(ws, { type:'error', text:'ゲーム未開始' }); return }
         if (actor !== this.currentTurnName()) { deps.send(ws, { type:'error', text:'あなたのターンではありません' }); return }
+        if (this.isParalyzed(actor)) { deps.send(ws, { type:'error', text:'まひ状態のためカードを使用できません' }); return }
 
         const { cardId, target } = parsed
 
@@ -442,6 +446,10 @@ export class GameEngine {
             this.state.phase = 'action'
             return
         }
+        if (this.isParalyzed(actor)) {
+            deps.send(ws, { type:'error', text:'まひ状態のためカードを使用できません' })
+            return
+        }
         if (actor !== pending.target) {
             deps.send(ws, { type:'error', text:'現在の防御ターンではありません' })
             return
@@ -571,7 +579,7 @@ export class GameEngine {
                 return { round: this.state.round, turn: this.currentTurnName() }
             }
             visited.add(current)
-            const { skipped, statusChanged } = this.applyStartOfTurnEffects(deps, current)
+            const { statusChanged } = this.applyStartOfTurnEffects(deps, current)
             const alive = this.removeDefeatedPlayers()
             if (this.state.players.length === 0) {
                 this.state.started = false
@@ -599,10 +607,7 @@ export class GameEngine {
                     } : undefined
                 })
             }
-            if (!skipped) {
-                return { round: this.state.round, turn: this.currentTurnName() }
-            }
-            nextActor = current
+            return { round: this.state.round, turn: this.currentTurnName() }
         }
     }
 
@@ -645,6 +650,8 @@ export class GameEngine {
         const current = this.ensureStatus(player)
         let statusChanged = false
 
+        this.state.paralyzedPlayer = null
+
         if (current.poison > 0) {
             const curHp = this.state.hp.get(player) ?? 0
             this.state.hp.set(player, Math.max(0, curHp - 1))
@@ -658,15 +665,20 @@ export class GameEngine {
             })
         }
 
-        let skipped = false
         if (current.paralyze > 0) {
             current.paralyze = Math.max(0, current.paralyze - 1)
             statusChanged = true
-            skipped = true
+            this.state.paralyzedPlayer = player
         }
 
         this.state.status.set(player, current)
-        return { skipped, statusChanged }
+        return { statusChanged }
+    }
+
+    private isParalyzed(player: string) {
+        const current = this.ensureStatus(player)
+        if (current.paralyze > 0) return true
+        return this.state.paralyzedPlayer === player
     }
 
     private resolveTarget(actor: string, target?: string): string | null {
