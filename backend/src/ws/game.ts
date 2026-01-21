@@ -22,7 +22,7 @@ export type PendingDefense = {
     blocked: number
     cardsUsed: number[]
     lastDefenseCardId?: number
-    statusEffect?: { status: 'poison' | 'paralyze'; amount: number }
+    statusEffect?: { status: 'poison' | 'paralyze' | 'attackUp' | 'defenseUp'; amount: number }
 }
 
 export type GameState = {
