@@ -244,7 +244,7 @@ export class GameEngine {
             }
             if (!this.state.started) return
             if (actor !== this.currentTurnName()) return
-            this.consumeParalyzeTurn(actor)
+            this.consumeStatusTurn(actor)
             const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
             if (nextInfo === 'game_over') return 'game_over'
             deps.broadcast({
@@ -322,7 +322,7 @@ export class GameEngine {
                 this.state.hp.set(targetName, cur + healValue)
                 deps.revealAiCard(actor, cardId)
                 this.state.aiCardUsed.add(actor)
-                this.consumeParalyzeTurn(actor)
+                this.consumeStatusTurn(actor)
                 const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
                 if (nextInfo === 'game_over') return 'game_over'
                 deps.broadcast({
@@ -397,7 +397,7 @@ export class GameEngine {
             const targetName = target ?? actor
             const cur = this.state.hp.get(targetName) ?? 0
             this.state.hp.set(targetName, cur + healValue)
-            this.consumeParalyzeTurn(actor)
+            this.consumeStatusTurn(actor)
             const nextInfo = this.advanceTurnInfoWithStatus(deps, actor)
             if (nextInfo === 'game_over') return 'game_over'
             deps.broadcast({
@@ -517,7 +517,7 @@ export class GameEngine {
         }
         this.state.pendingDefense = undefined
         this.state.phase = 'action'
-        this.consumeParalyzeTurn(pending.target)
+        this.consumeStatusTurn(pending.target)
 
         if (pending.statusEffect) {
             this.applyStatus(pending.target, pending.statusEffect.status, pending.statusEffect.amount)
@@ -638,7 +638,6 @@ export class GameEngine {
         if (current.poison > 0) {
             const curHp = this.state.hp.get(player) ?? 0
             this.state.hp.set(player, Math.max(0, curHp - 1))
-            current.poison = Math.max(0, current.poison - 1)
             statusChanged = true
             deps.broadcast({
                 type: 'replay',
@@ -657,10 +656,11 @@ export class GameEngine {
         return current.paralyze > 0
     }
 
-    private consumeParalyzeTurn(player: string) {
+    private consumeStatusTurn(player: string) {
         const current = this.ensureStatus(player)
-        if (current.paralyze <= 0) return
+        if (current.paralyze <= 0 && current.poison <= 0) return
         current.paralyze = Math.max(0, current.paralyze - 1)
+        current.poison = Math.max(0, current.poison - 1)
         this.state.status.set(player, current)
     }
 
