@@ -713,29 +713,28 @@ export default function Game() {
     return (
         <div className={styles.page}>
             <div className={styles.resultArea}>
-                <header className={styles.header}>
-                    <p><span>ターン {st.round}</span></p>
-                </header>
-
-                <div  className={styles.playArea}>
-                    <div className={styles.playLabelArea}>
-                        <div className={styles.leftPlayerName}><p>{leftPlayerName ?? '---'}</p></div>
-                        <div className={styles.arrow}><img src={`arrow.svg`}/></div>
-                        <div className={styles.rightPlayerName}><p>{rightPlayerName ?? '---'}</p></div>
+                <div className={styles.pc}>
+                    <div className={styles.header}>
+                        <p><span>ターン {st.round}</span></p>
                     </div>
-                    <div className={styles.playCardArea}>
-                        <CardSlot card={leftCardMeta} isSelf={true} animate={replayStage === 'attack'} />
-                        <CardSlot card={rightCardMeta ?? null} isSelf={false} animate={replayStage === 'defense'} />
-                    </div>
-                    {damagePopup && damagePopup.amount > 0 && (
-                        <div className={styles.damagePopup} key={`${damagePopup.target ?? 'target'}-${damagePopup.amount}`}>
-                            -{damagePopup.amount}
+                    <div className={styles.playArea}>
+                        <div className={styles.playLabelArea}>
+                            <div className={styles.leftPlayerName}><p>{leftPlayerName ?? '---'}</p></div>
+                            <div className={styles.arrow}><img src={`arrow.svg`}/></div>
+                            <div className={styles.rightPlayerName}><p>{rightPlayerName ?? '---'}</p></div>
                         </div>
-                    )}
+                        <div className={styles.playCardArea}>
+                            <div className={styles.leftCard}><CardSlot card={leftCardMeta} isSelf={true} animate={replayStage === 'attack'} /></div>
+                            <div style={{opacity: 0}}><img src={`arrow.svg`}/></div>
+                            <div className={styles.rightCard}><CardSlot card={rightCardMeta ?? null} isSelf={false} animate={replayStage === 'defense'} /></div>
+                        </div>
+                        {damagePopup && damagePopup.amount > 0 && (
+                            <div className={styles.damagePopup} key={`${damagePopup.target ?? 'target'}-${damagePopup.amount}`}>
+                                -{damagePopup.amount}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </div>
-
-            <div className={styles.selectArea}>
                 <section className={styles.playersBoard}>
                     {playersToDisplay.length === 0 && (
                         <p className={styles.placeholder}>プレイヤー情報を待機中...</p>
@@ -830,6 +829,9 @@ export default function Game() {
                         })}
                     </div>
                 </section>
+            </div>
+
+            <div className={styles.selectArea}>
                 <section className={styles.actions}>
                     <div className={styles.handCards}>
                         {hand.length === 0 && <span className={styles.emptyHand}>カードなし</span>}

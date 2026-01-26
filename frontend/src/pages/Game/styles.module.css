@@ -9,7 +9,7 @@
 
 .resultArea {
   width: 100%;
-  height: 38vh;
+  height: 55vh;
 }
 
 .header {
@@ -64,12 +64,25 @@
 
 .playCardArea {
   width: 100%;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+
+  .leftCard {
+    grid-column: 1 / 2;
+    width: 100%;
+  }
+  .arrow {
+    grid-column: 2 / 3;
+  }
+  .rightCard {
+    grid-column: 3 / 4;
+    width: 100%;
+  }
 }
 
 .cardSlot {
-  width: 35%;
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -136,7 +149,7 @@
 }
 
 .selectArea {
-  height: 60%;
+  height: 45vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -147,7 +160,7 @@
 
   .myPlayerCard {
     width: calc(100% - 16px);
-    margin-bottom: 8px;
+    margin: 24px 0 8px;
   }
 }
 
@@ -164,6 +177,7 @@
     .playerName {
       font-size: 14px;
       color: var(--textColor); 
+      margin: 0;
     }
   }
 }
@@ -227,6 +241,7 @@
   font-weight: 600;
   font-size: 20px;
   color: var(--textColor); 
+  margin: 0;
 }
 
 .hpRow {
@@ -546,4 +561,52 @@
       width: 100px;
     }
   }
+}
+
+@media (min-width: 568px) {
+  .resultArea {
+    height: 65vh;
+  }
+  .cardSlot {
+    width: 60%;
+    margin: 0 auto;
+  }
+  .selectArea {
+    height: 35vh;
+  }
+  .handCards {
+    width: 80%;
+    margin: 0 auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .resultArea {
+    height: 55vh;
+    display: flex;
+
+    .pc {
+      width: 70vw;
+    }
+    .playersBoard {
+      width: 30vw;
+      margin: 0 24px;
+
+      .myPlayerCard {
+        margin: 48px 0 8px;
+      }
+
+      .enemyPlayersBoard {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+    }
+  }
+  .selectArea {
+    height: 45vh;
+  }
+    .handCards {
+    width: 50%;
+    }
 }
