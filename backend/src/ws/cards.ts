@@ -8,7 +8,7 @@ export type AttackCardEffect = {
     statusEffect?: StatusEffect
 }
 
-export const DEFAULT_DECK_IDS: Array<number> = [101,101,102,102,103,104,105,201,202,203,301,302]
+export const DEFAULT_DECK_IDS: Array<number> = [101,101,102,102,104,105,201,202,203,301,302]
 
 export const ATTACK_CARDS: Record<number, AttackCardEffect> = {
     101: { damage: 1 },
