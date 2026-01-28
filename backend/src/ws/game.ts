@@ -1,6 +1,6 @@
 // src/ws/game.ts
 import type { Client } from '../types'
-import { getAttackEffect, getAttackDamage, getDefenseValue, getHealValue, isAttackCard, isDefenseCard, isHealCard } from './cards'
+import { getAttackEffect, getDefenseValue, getHealValue, isAttackCard, isDefenseCard, isHealCard, DEFAULT_DECK_IDS } from './cards'
 
 export type GameDeps = {
     send: (ws: Client, obj: unknown) => void
@@ -104,7 +104,7 @@ export class GameEngine {
 
     buildDeck() {
         // === デッキ一覧 ===
-        const ids = [101,101,102,102,103,104,105,201,202,203,301,302]
+        const ids = DEFAULT_DECK_IDS
         for (let i = ids.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1))
             ;[ids[i], ids[j]] = [ids[j], ids[i]]
