@@ -7,6 +7,13 @@ type Type = {
     disabled?: boolean
 }
 
+/**
+ * 通常のボタンコンポーネント
+ * @param {string} label - ボタンに表示する文字
+ * @param {string | undefined} bg - 背景の指定
+ * @param {() => void} onClick - 処理内容
+ * @param {boolean | undefined} disabled - 押せなくする
+ */
 export default function NormalBtn(props: Type) {
     const { label, bg, onClick, disabled } = props
     return(
