@@ -22,9 +22,9 @@ export const CARD_LIBRARY: Record<number, CardMeta> = {
     104: { id: 104, label: '麻痺矢', detail: '1ダメージを与える+1ターンまひ状態にする', category: 'attack', requiresTarget: true, allowSelfTarget: true, img: '' },
     105: { id: 105, label: 'ひでおの愛剣', detail: '英雄になりかけた男が所持していた剣 (6ダメージを与える)', category: 'attack', requiresTarget: true, allowSelfTarget: true, img: 'cards/hideoSword' },
     /* 防御カード */
-    201: { id: 201, label: 'ボロボロの盾', detail: '1ダメージ防ぐ', category: 'defense', img: 'cards/woodenShield' },
+    201: { id: 201, label: '丸盾', detail: '1ダメージ防ぐ', category: 'defense', img: 'cards/woodenShield' },
     202: { id: 202, label: '量産型シールド', detail: '3ダメージ防ぐ', category: 'defense', img: 'cards/MassProduction' },
-    203: { id: 203, label: 'ひでおの愛盾', detail: '英雄になりかけた男が所持していた盾 (6ダメージ防ぐ)', category: 'defense', img: '' },
+    203: { id: 203, label: 'ひでおの愛盾', detail: '英雄になりかけた男が所持していた盾 (6ダメージ防ぐ)', category: 'defense', img: 'cards/hideoShield' },
     /* 回復カード */
     301: { id: 301, label: '癒しの薬草', detail: 'HPが1回復（HPが満タンの時最大体力が増える）', category: 'heal', requiresTarget: true, allowSelfTarget: true, img: 'cards/medicinalHerbs' },
     302: { id: 302, label: 'ヒールポーション', detail: 'HPが3回復 (HPが満タンの時、最大HPが増える)', category: 'heal', requiresTarget: true, allowSelfTarget: true, img: '' }
