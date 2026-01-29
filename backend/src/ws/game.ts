@@ -155,6 +155,7 @@ export class GameEngine {
     }
 
     sendHandSnapshot(deps: GameDeps, player: string) {
+        this.ensureHandSize(deps, player, 3)
         this.sendHand(deps, player)
     }
 
@@ -210,6 +211,8 @@ export class GameEngine {
 
     handleMessage(deps: GameDeps, ws: Client, actor: string, parsed: any): 'game_over' | void {
         if (parsed.type === 'sync') {
+            this.ensureStarted(deps)
+            this.ensureHandSize(deps, actor, 3)
             deps.send(ws, {
                 type: 'state',
                 hp: Object.fromEntries(this.state.hp),
@@ -726,5 +729,12 @@ export class GameEngine {
             turn: this.currentTurnName(),
             phase: this.state.phase
         })
+    }
+
+    private ensureHandSize(deps: GameDeps, player: string, size: number) {
+        const hand = this.state.hands.get(player) ?? []
+        if (hand.length >= size) return
+        this.drawCards(player, size - hand.length)
+        this.sendHand(deps, player)
     }
 }

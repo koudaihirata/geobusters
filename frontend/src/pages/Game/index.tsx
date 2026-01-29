@@ -345,6 +345,9 @@ export default function Game() {
                             // 本来の3枚に、位置連動のオリジナルカード（非デッキ由来）を1枚追加表示する
                             const aiId = aiCardIdRef.current
                             setHand(aiId && !aiCardUsedRef.current ? [...incoming, aiId] : incoming)
+                            if (incoming.length < 3 && wsRef.current?.readyState === WebSocket.OPEN) {
+                                wsRef.current.send(JSON.stringify({ type: 'sync' }))
+                            }
                         }
                         setSelectedCardIndex(null)
                         break
