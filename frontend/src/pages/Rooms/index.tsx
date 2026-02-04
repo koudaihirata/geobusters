@@ -62,6 +62,8 @@ export default function Rooms() {
   const [state, dispatch] = useReducer(Reducer, undefined, createInitialState)
   const wsRef = useRef<WebSocket | null>(null)
   const nameRef = useRef(state.name)
+  const positionRef = useRef<GeolocationPosition | null>(null)
+  const geoAlertedRef = useRef(false)
   const shouldReconnect = useRef(Boolean(navStateRef.current?.joined))
   const lastNavState = useRef<NavState>(navStateRef.current)
   const CLIENT_ID_STORAGE_KEY = 'rooms:clientId'
@@ -273,6 +275,19 @@ export default function Rooms() {
     nameRef.current = state.name
   }, [state.name])
 
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition((pos) => {
+      positionRef.current = pos
+    }, (err) => {
+      geoError(err)
+      if (!geoAlertedRef.current) {
+        geoAlertedRef.current = true
+        alert('位置情報の許可が必要です。ブラウザの設定から許可してください。')
+      }
+    }, geoOptions)
+  }, [])
+
   console.log(state);
 
   const isHost = Boolean(state.hostId && state.hostId === clientIdRef.current)
@@ -342,18 +357,30 @@ export default function Rooms() {
                   }
                   if (state.members.length > 1) {
                     dispatch(setLoading(true))
-                    navigator.geolocation.getCurrentPosition((pos) => {
+                    const cached = positionRef.current
+                    if (cached) {
                       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
                       wsRef.current.send(JSON.stringify({
                         type: 'start',
                         clientId: clientIdRef.current,
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
+                        lat: cached.coords.latitude,
+                        lng: cached.coords.longitude,
                       }))
-                    }, (err) => {
-                      geoError(err)
-                      dispatch(setLoading(false))
-                    }, geoOptions)
+                    } else {
+                      navigator.geolocation.getCurrentPosition((pos) => {
+                        positionRef.current = pos
+                        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+                        wsRef.current.send(JSON.stringify({
+                          type: 'start',
+                          clientId: clientIdRef.current,
+                          lat: pos.coords.latitude,
+                          lng: pos.coords.longitude,
+                        }))
+                      }, (err) => {
+                        geoError(err)
+                        dispatch(setLoading(false))
+                      }, geoOptions)
+                    }
                   } else {
                     dispatch(appendLog(`❗ error: ゲームを始めるには2人以上が必要です`))
                   }
