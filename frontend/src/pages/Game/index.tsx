@@ -107,8 +107,9 @@ export default function Game() {
     }>({ results: false, winner: '' })
     const aiCardUsedRef = useRef(false)
     const aiCardIdRef = useRef<number | null>(null)
-    const pendingAiAppendRef = useRef(false)
-    const handRetryTimerRef = useRef<number | null>(null)
+    const lastSyncAtRef = useRef(0)
+    const syncTimerRef = useRef<number | null>(null)
+    const syncScheduledAtRef = useRef<number | null>(null)
     const navigatedRef = useRef(false)
     const finishRef = useRef(false)
     // ターン/ターゲット関連
@@ -146,6 +147,26 @@ export default function Game() {
         handRef.current = hand
     }, [hand])
 
+    const requestSync = (delayMs = 0) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+        const now = Date.now()
+        const cooldownMs = 5000
+        const earliest = lastSyncAtRef.current + cooldownMs
+        const runAt = Math.max(now + delayMs, earliest)
+        if (syncScheduledAtRef.current !== null && syncScheduledAtRef.current <= runAt) return
+        if (syncTimerRef.current !== null) {
+            window.clearTimeout(syncTimerRef.current)
+        }
+        syncScheduledAtRef.current = runAt
+        syncTimerRef.current = window.setTimeout(() => {
+            syncTimerRef.current = null
+            syncScheduledAtRef.current = null
+            if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+            lastSyncAtRef.current = Date.now()
+            wsRef.current.send(JSON.stringify({ type: 'sync' }))
+        }, runAt - now)
+    }
+
     // ====== WS 接続 / 受信 ======
     useEffect(() => {
         const ws = new WebSocket(`${baseURL}?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&cid=${encodeURIComponent(clientIdRef.current)}`)
@@ -172,7 +193,10 @@ export default function Game() {
             })
         }
 
-        ws.onopen = () => ws.send(JSON.stringify({ type:'sync' }))
+        ws.onopen = () => {
+            lastSyncAtRef.current = Date.now()
+            ws.send(JSON.stringify({ type:'sync' }))
+        }
         ws.onmessage = async (e) => {
             try {
                 let text = ''
@@ -346,29 +370,17 @@ export default function Game() {
                         }
                         break
                     case 'hand_update':
-                        console.log('hand_update', typedMsg.hand)
                         {
                             const incoming = typedMsg.hand ?? []
                             if (incoming.length < 3) {
                                 setHand(incoming)
-                                if (handRetryTimerRef.current === null && wsRef.current?.readyState === WebSocket.OPEN) {
-                                    handRetryTimerRef.current = window.setTimeout(() => {
-                                        handRetryTimerRef.current = null
-                                        wsRef.current?.send(JSON.stringify({ type: 'sync' }))
-                                    }, 300)
-                                }
+                                requestSync(3000)
                                 break
-                            }
-
-                            if (handRetryTimerRef.current !== null) {
-                                window.clearTimeout(handRetryTimerRef.current)
-                                handRetryTimerRef.current = null
                             }
 
                             // 本来の3枚に、位置連動のオリジナルカード（非デッキ由来）を1枚追加表示する
                             const aiId = aiCardIdRef.current
                             if (aiId && !aiCardUsedRef.current) {
-                                pendingAiAppendRef.current = false
                                 setHand(incoming.includes(aiId) ? incoming : [...incoming, aiId])
                             } else {
                                 setHand(incoming)
@@ -390,9 +402,6 @@ export default function Game() {
                                         ? prev
                                         : [...prev, typedMsg.card_id]
                                 ))
-                                pendingAiAppendRef.current = false
-                            } else {
-                                pendingAiAppendRef.current = true
                             }
                         }
                         break
@@ -404,8 +413,8 @@ export default function Game() {
             }
         }
         return () => {
-            if (handRetryTimerRef.current !== null) {
-                window.clearTimeout(handRetryTimerRef.current)
+            if (syncTimerRef.current !== null) {
+                window.clearTimeout(syncTimerRef.current)
             }
             if (replayTimerRef.current !== null) {
                 window.clearTimeout(replayTimerRef.current)

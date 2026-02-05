@@ -230,7 +230,6 @@ export class Room {
           server.send(JSON.stringify({ type: 'error', text: '未対応のフレーム形式' }))
           return
         }
-        console.log(text)
         if (!text) return
 
         const msg = JSON.parse(text)
