@@ -94,6 +94,7 @@ export default function Game() {
     // ゲーム状態
     const [st, setSt] = useState<S>(initS)
     const [hand, setHand] = useState<number[]>([])
+    const handRef = useRef<number[]>([])
     const [phase, setPhase] = useState<'action' | 'defense'>('action')
     const [selectedCardIndex, setSelectedCardIndex] = useState<number|null>(null)
     const [defensePrompt, setDefensePrompt] = useState<DefenseSnapshot | null>(null)
@@ -106,6 +107,8 @@ export default function Game() {
     }>({ results: false, winner: '' })
     const aiCardUsedRef = useRef(false)
     const aiCardIdRef = useRef<number | null>(null)
+    const pendingAiAppendRef = useRef(false)
+    const handRetryTimerRef = useRef<number | null>(null)
     const navigatedRef = useRef(false)
     const finishRef = useRef(false)
     // ターン/ターゲット関連
@@ -138,6 +141,10 @@ export default function Game() {
     useEffect(() => {
         aiCardIdRef.current = aiCardId
     }, [aiCardId])
+
+    useEffect(() => {
+        handRef.current = hand
+    }, [hand])
 
     // ====== WS 接続 / 受信 ======
     useEffect(() => {
@@ -342,11 +349,29 @@ export default function Game() {
                         console.log('hand_update', typedMsg.hand)
                         {
                             const incoming = typedMsg.hand ?? []
+                            if (incoming.length < 3) {
+                                setHand(incoming)
+                                if (handRetryTimerRef.current === null && wsRef.current?.readyState === WebSocket.OPEN) {
+                                    handRetryTimerRef.current = window.setTimeout(() => {
+                                        handRetryTimerRef.current = null
+                                        wsRef.current?.send(JSON.stringify({ type: 'sync' }))
+                                    }, 300)
+                                }
+                                break
+                            }
+
+                            if (handRetryTimerRef.current !== null) {
+                                window.clearTimeout(handRetryTimerRef.current)
+                                handRetryTimerRef.current = null
+                            }
+
                             // 本来の3枚に、位置連動のオリジナルカード（非デッキ由来）を1枚追加表示する
                             const aiId = aiCardIdRef.current
-                            setHand(aiId && !aiCardUsedRef.current ? [...incoming, aiId] : incoming)
-                            if (incoming.length < 3 && wsRef.current?.readyState === WebSocket.OPEN) {
-                                wsRef.current.send(JSON.stringify({ type: 'sync' }))
+                            if (aiId && !aiCardUsedRef.current) {
+                                pendingAiAppendRef.current = false
+                                setHand(incoming.includes(aiId) ? incoming : [...incoming, aiId])
+                            } else {
+                                setHand(incoming)
                             }
                         }
                         setSelectedCardIndex(null)
@@ -359,11 +384,16 @@ export default function Game() {
                             setAiCardId(typedMsg.card_id)
                             setAiCardUsed(false)
                             aiCardUsedRef.current = false
-                            setHand(prev => (
-                                prev.includes(typedMsg.card_id)
-                                    ? prev
-                                    : [...prev, typedMsg.card_id]
-                            ))
+                            if (handRef.current.length >= 3) {
+                                setHand(prev => (
+                                    prev.includes(typedMsg.card_id)
+                                        ? prev
+                                        : [...prev, typedMsg.card_id]
+                                ))
+                                pendingAiAppendRef.current = false
+                            } else {
+                                pendingAiAppendRef.current = true
+                            }
                         }
                         break
                     default:
@@ -374,6 +404,9 @@ export default function Game() {
             }
         }
         return () => {
+            if (handRetryTimerRef.current !== null) {
+                window.clearTimeout(handRetryTimerRef.current)
+            }
             if (replayTimerRef.current !== null) {
                 window.clearTimeout(replayTimerRef.current)
             }

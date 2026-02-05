@@ -281,7 +281,7 @@ export default function Rooms() {
       positionRef.current = pos
     }, (err) => {
       geoError(err)
-      if (!geoAlertedRef.current) {
+      if (err.code === 1 && !geoAlertedRef.current) {
         geoAlertedRef.current = true
         alert('位置情報の許可が必要です。ブラウザの設定から許可してください。')
       }
