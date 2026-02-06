@@ -2,21 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { baseURL } from '../../utils/baseURL'
 import styles from './styles.module.css'
-import { CARD_LIBRARY, STATUS_BONUS_VALUE, type CardCategory, type CardMeta } from '../../utils/cards'
+import { CARD_LIBRARY, type CardCategory, type CardMeta } from '../../utils/cards'
 import NormalBtn from '../../components/button/NormalBtn'
 import { stringToJson } from '../../utils/stringToJson'
 import SelectedCard from '../../components/SelectedCard'
 import { resolveCardImgSrc } from '../../utils/resolveCardImg'
+import { CardSlot } from './playLog'
+import { buildPlayersToDisplay, hpBarClass, hpPercent, renderStatusBadges } from './ui'
+import type { DefenseSnapshot, GameWsMsg, S, SharedPlayView } from './types'
 
 // ====== 型定義 ======
-type StatusEffects = { poison: number; paralyze: number; attackUp: number; defenseUp: number }
-type S = {
-    players: string[]
-    hp: Record<string, number>
-    status: Record<string, StatusEffects>
-    round: number
-    turn: string
-}
 // 初期状態
 const initS: S = { players:[], hp:{}, status:{}, round:1, turn:'' }
 // HP の上限
@@ -24,22 +19,7 @@ const MAX_HP = 10
 // clientId 保管キー
 const CLIENT_ID_STORAGE_KEY = 'rooms:clientId'
 // プレイログ表示用の共有状態
-type SharedPlayView = { attacker?: string | null; attackCardId?: number | null; target?: string | null; defenseCardId?: number | null }
 // AIカードの受信データ
-type AiCardMsg = { type: 'ai_card'; card_id: number; spot: string; card_effect: string; card_img: string; player?: string }
-
-// ====== WS メッセージ型 ======
-type DefenseSnapshot = { attacker: string; target: string; damage: number; cardId?: number; defenseCardId?: number }
-type GameStartedMsg = { type: 'game_started'; players?: string[]; hp?: Record<string, number>; status?: Record<string, StatusEffects>; round?: number; turn?: string }
-type StateMsg = { type: 'state'; hp?: Record<string, number>; status?: Record<string, StatusEffects>; round?: number; turn?: string; phase?: 'action' | 'defense'; defense?: DefenseSnapshot }
-type PlayedMsg = { type: 'played'; by?: string; cardId?: number; target?: string; delta?: { hp?: Record<string, number> }; status?: Record<string, StatusEffects>; next?: { round?: number; turn?: string }; defense?: { by: string; cardId?: number; blocked: number; cards?: number[] } }
-type GameOverMsg = { type: 'game_over'; winner?: string }
-type PhaseChangedMsg = { type: 'phase_changed'; phase: 'lobby' | 'game' }
-type DefenseRequestedMsg = { type: 'defense_requested'; attacker: string; target: string; damage: number; cardId: number; defenseCardId?: number }
-type HandUpdateMsg = { type: 'hand_update'; hand: number[] }
-type ReplayMsg = { type: 'replay'; stage: 'attack' | 'defense' | 'damage'; attacker?: string; target?: string; defender?: string; cardId?: number; value?: number; amount?: number }
-type GameWsMsg = GameStartedMsg | StateMsg | PlayedMsg | GameOverMsg | PhaseChangedMsg | DefenseRequestedMsg | HandUpdateMsg | AiCardMsg
-    | ReplayMsg
 
 // WS で受け取るメッセージの簡易ガード
 const isGameWsMsg = (msg: unknown): msg is GameWsMsg => {
@@ -539,63 +519,9 @@ export default function Game() {
     // }
 
     // ====== HP 表示 ======
-    const hpPercent = (player: string) => {
-        const value = st.hp[player] ?? 0
-        return Math.max(0, Math.min(100, (value / MAX_HP) * 100))
-    }
-
-    const hpBarClass = (player: string) => {
-        const percent = hpPercent(player)
-        if (percent <= 30) return styles.hpLow
-        if (percent <= 50) return styles.hpHalf
-        return styles.hpFull
-    }
-
-    const resolveStatus = (player: string): StatusEffects => (
-        st.status[player] ?? { poison: 0, paralyze: 0, attackUp: 0, defenseUp: 0 }
-    )
-
-    const renderStatusBadges = (player: string) => {
-        const status = resolveStatus(player)
-        const badges: Array<{ key: string; label: string; className: string }> = []
-        if (status.poison > 0) badges.push({ key: 'poison', label: `毒${status.poison}`, className: styles.statusPoison })
-        if (status.paralyze > 0) badges.push({ key: 'paralyze', label: `まひ${status.paralyze}`, className: styles.statusParalyze })
-        if (status.attackUp > 0) {
-            badges.push({
-                key: 'attackUp',
-                label: `攻+${status.attackUp * STATUS_BONUS_VALUE.attackUp}`,
-                className: styles.statusAttack
-            })
-        }
-        if (status.defenseUp > 0) {
-            badges.push({
-                key: 'defenseUp',
-                label: `防+${status.defenseUp * STATUS_BONUS_VALUE.defenseUp}`,
-                className: styles.statusDefense
-            })
-        }
-        if (badges.length === 0) return null
-        return (
-            <div className={styles.statusBadges}>
-                {badges.map(badge => (
-                    <span key={badge.key} className={`${styles.statusBadge} ${badge.className}`}>
-                        {badge.label}
-                    </span>
-                ))}
-            </div>
-        )
-    }
 
     // ====== プレイヤー並び ======
-    const playersToDisplay = (() => {
-        const ordered = st.players.length ? [...st.players] : [...Object.keys(st.hp)]
-        const idx = ordered.indexOf(name)
-        if (idx > 0) {
-            ordered.splice(idx, 1)
-            ordered.unshift(name)
-        }
-        return ordered
-    })()
+    const playersToDisplay = buildPlayersToDisplay(st.players, st.hp, name)
     const defenseTarget = defensePrompt?.target
     // カードIDから表示用メタを解決
     const resolveCardMetaById = (cardId: number | null | undefined): CardMeta | undefined => {
@@ -721,40 +647,6 @@ export default function Game() {
     }
 
 
-    // ====== プレイログのカード表示 ======
-    const CardSlot = ({
-        card,
-        isSelf,
-        animate
-    }: {
-        card: typeof selectedCardMeta | null | undefined
-        isSelf: boolean
-        animate: boolean
-    }) => {
-        const showCard = card && (card.category !== 'attack' || isSelf)
-        return (
-            <div className={styles.cardSlot}>
-                {showCard ? (
-                    <div className={`${styles.selectedCardBar} ${categoryClass[card.category] ?? ''} ${animate ? styles.replayRise : ''}`}>
-                        <SelectedCard
-                            card={card}
-                            resolveCardImgSrc={resolveCardImgSrc}
-                            small={false}
-                            />
-                    </div>
-                ) : (
-                    <div className={styles.selectedCardBar}>
-                        <p className={styles.selectedCardDetail}>
-                            {
-                                isDefenseTurn ? '防御カードを選択してください' : isSelf ? 'カードを選択してください' : selectedTarget ? `${selectedTarget}をターゲット中` :'ターゲットを選択してください'
-                            }
-                        </p>
-                    </div>
-                )}
-            </div>
-        )
-    }
-
     return (
         <div className={styles.page}>
             <div className={styles.resultArea}>
@@ -769,9 +661,29 @@ export default function Game() {
                             <div className={styles.rightPlayerName}><p>{rightPlayerName ?? '---'}</p></div>
                         </div>
                         <div className={styles.playCardArea}>
-                            <div className={styles.leftCard}><CardSlot card={leftCardMeta} isSelf={true} animate={replayStage === 'attack'} /></div>
+                            <div className={styles.leftCard}>
+                                <CardSlot
+                                    card={leftCardMeta}
+                                    isSelf={true}
+                                    animate={replayStage === 'attack'}
+                                    isDefenseTurn={isDefenseTurn}
+                                    selectedTarget={selectedTarget}
+                                    categoryClass={categoryClass}
+                                    resolveCardImgSrc={resolveCardImgSrc}
+                                />
+                            </div>
                             <div style={{opacity: 0}}><img src={`arrow.svg`}/></div>
-                            <div className={styles.rightCard}><CardSlot card={rightCardMeta ?? null} isSelf={false} animate={replayStage === 'defense'} /></div>
+                            <div className={styles.rightCard}>
+                                <CardSlot
+                                    card={rightCardMeta ?? null}
+                                    isSelf={false}
+                                    animate={replayStage === 'defense'}
+                                    isDefenseTurn={isDefenseTurn}
+                                    selectedTarget={selectedTarget}
+                                    categoryClass={categoryClass}
+                                    resolveCardImgSrc={resolveCardImgSrc}
+                                />
+                            </div>
                         </div>
                         {damagePopup && damagePopup.amount > 0 && (
                             <div className={styles.damagePopup} key={`${damagePopup.target ?? 'target'}-${damagePopup.amount}`}>
@@ -818,10 +730,10 @@ export default function Game() {
                                                 <span className={styles.hpValue}>HP {hp}</span>
                                             </div>
                                         </div>
-                                        {renderStatusBadges(player)}
+                                        {renderStatusBadges(st.status, player)}
                                     </div>
                                     <div className={styles.hpBarTrack}>
-                                        <div className={`${styles.hpBar} ${hpBarClass(player)}`} style={{ width: `${hpPercent(player)}%` }} />
+                                        <div className={`${styles.hpBar} ${hpBarClass(st.hp, player, MAX_HP)}`} style={{ width: `${hpPercent(st.hp, player, MAX_HP)}%` }} />
                                     </div>
                                 </div>
                             )
@@ -863,10 +775,10 @@ export default function Game() {
                                                 <span className={styles.hpValue}>HP {hp}</span>
                                             </div>
                                         </div>
-                                        {renderStatusBadges(player)}
+                                        {renderStatusBadges(st.status, player)}
                                     </div>
                                         <div className={styles.hpBarTrack}>
-                                        <div className={`${styles.hpBar} ${hpBarClass(player)}`} style={{ width: `${hpPercent(player)}%` }} />
+                                        <div className={`${styles.hpBar} ${hpBarClass(st.hp, player, MAX_HP)}`} style={{ width: `${hpPercent(st.hp, player, MAX_HP)}%` }} />
                                     </div>
                                 </div>
                             )
