@@ -18,7 +18,7 @@ export type State = {
 
 export const defaultState: State = {
     roomId: 'room-1',
-    name: 'Kodai',
+    name: '',
     connected: false,
     joined: false,
     input: '',
