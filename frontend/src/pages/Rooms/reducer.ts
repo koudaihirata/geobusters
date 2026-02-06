@@ -13,7 +13,8 @@ export type State = {
     members: string[],
     hostId: string | null,
     loading: boolean,
-    aiCardDetail: CardMeta
+    aiCardDetail: CardMeta,
+    errorMess: string
 }
 
 export const defaultState: State = {
@@ -33,6 +34,7 @@ export const defaultState: State = {
         detail: 'AIにカードを生成してもらっています',
         img: ''
     },
+    errorMess: ''
 }
 
 export function Reducer(state: State, action: WsAction): State {
@@ -41,13 +43,15 @@ export function Reducer(state: State, action: WsAction): State {
             if (state.connected) return state
             return {
                 ...state, 
-                roomId: action.roomId
+                roomId: action.roomId,
+                errorMess: action.roomId.trim() ? '' : state.errorMess
             }
         case 'SET_NAME':
             if (state.connected) return state
             return {
                 ...state,
-                name: action.name
+                name: action.name,
+                errorMess: action.name.trim() ? '' : state.errorMess
             }
         case 'CONNECTING':
             return {
@@ -110,6 +114,12 @@ export function Reducer(state: State, action: WsAction): State {
                     detail: action.effect,
                     img: action.img
                 }
+            }
+        }
+        case 'ERROR_MESSAGE': {
+            return {
+                ...state,
+                errorMess: action.payload.errorMess
             }
         }
     }

@@ -21,8 +21,19 @@
         .inputWrap {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 16px;
 
+            .nameWrap {
+
+                input {
+                    width: calc(100% - 32px);
+                }
+                p {
+                    margin: 0;
+                    text-align: start;
+                    color: #a7a7a7;
+                }
+            }
             input {
                 height: 50px;
                 border: 1px solid #D9D9D9;
@@ -116,6 +127,18 @@
 .claimHint {
     font-size: 12px;
     color: #555;
+}
+
+.roomJoiningBtn {
+    display: grid;
+    gap: 8px;
+}
+
+.errorMess {
+    margin: 0;
+    font-size: 12px;
+    color: #e53e3e;
+    text-align: center;
 }
 
 

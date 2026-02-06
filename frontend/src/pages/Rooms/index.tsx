@@ -3,7 +3,7 @@
 import styles from './styles.module.css'
 import { useEffect, useReducer, useRef } from 'react'
 import { defaultState, Reducer } from './reducer';
-import { appendLog, connected, disconnected, joined, setAiCardDetail, setLoading, setMembers, setName, setRoom } from './action';
+import { appendLog, connected, disconnected, joined, setAiCardDetail, setErrorMessage, setLoading, setMembers, setName, setRoom } from './action';
 import { baseURL } from '../../utils/baseURL';
 import NormalBtn from '../../components/button/NormalBtn';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -94,6 +94,14 @@ export default function Rooms() {
 
   const connect = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return
+    if (!state.name.trim()) {
+      dispatch(setErrorMessage('ニックネームを入力してください！！'))
+      return
+    }
+    if (!state.roomId.trim()) {
+      dispatch(setErrorMessage('ルーム名を入力してください！！'))
+      return
+    }
     dispatch(appendLog('...connecting'))
     const ws = new WebSocket(WS_BASE)
     wsRef.current = ws
@@ -302,11 +310,17 @@ export default function Rooms() {
             <div className={styles.roomConnectArea}>
               <h1 className={styles.roomTitle}><img src={`logo.svg`} alt="ジオバスター" /></h1>
               <div className={styles.inputWrap}>
-                <input placeholder="ニックネーム" value={state.name} onChange={(e) => dispatch(setName(e.target.value))} disabled={state.connected}/>
-                <input placeholder="ルームの名前" value={state.roomId} onChange={(e) => dispatch(setRoom(e.target.value))} disabled={state.connected}/>
+                <div className={styles.nameWrap}>
+                  <input id='nickName' placeholder="ニックネーム" value={state.name} onChange={(e) => dispatch(setName(e.target.value))} disabled={state.connected}/>
+                  <p><small>※ ルーム内で同じ名前は使用できません</small></p>
+                </div>
+                <input id='roomName' placeholder="ルームの名前" value={state.roomId} onChange={(e) => dispatch(setRoom(e.target.value))} disabled={state.connected}/>
               </div>
             </div>
             <div className={styles.roomJoiningBtn}>
+              {state.errorMess && (
+                <p className={styles.errorMess}>{state.errorMess}</p>
+              )}
               <NormalBtn label='決定' onClick={connect}/>
 
               {/* システムログ機能 */}

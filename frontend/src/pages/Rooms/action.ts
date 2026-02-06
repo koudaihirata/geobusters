@@ -14,6 +14,12 @@ export type WsAction =
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_MEMBERS'; members: string[]; hostId?: string | null }
   | { type: 'AI_CARD_DETAIL'; name: string; category: CardCategory; value: number; effect: string, img: string}
+  | { 
+      type: 'ERROR_MESSAGE',
+      payload: {
+        errorMess: string
+      }
+    }
 
 export const setRoom = (roomId: string): WsAction => ({ type: 'SET_ROOM', roomId });
 export const setName = (name: string): WsAction => ({ type: 'SET_NAME', name });
@@ -26,3 +32,4 @@ export const setInput = (input: string): WsAction => ({ type: 'SET_INPUT', input
 export const setLoading = (loading: boolean): WsAction => ({ type: 'SET_LOADING', loading });
 export const setMembers = (members: string[], hostId?: string | null): WsAction => ({ type: 'SET_MEMBERS', members, hostId });
 export const setAiCardDetail = (name: string, category: CardCategory, value: number, effect: string, img: string): WsAction => ({ type: 'AI_CARD_DETAIL', name, category, value, effect, img })
+export const setErrorMessage = (errorMess: string): WsAction => ({ type: 'ERROR_MESSAGE', payload: { errorMess } })
