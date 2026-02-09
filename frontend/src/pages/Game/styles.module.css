@@ -355,6 +355,41 @@
   gap: 0;
 }
 
+.handSkeletonWrap {
+  width: 100%;
+  position: relative;
+}
+
+.handSkeletonGrid {
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  gap: 10px;
+}
+
+.handSkeletonCard {
+  height: 150px;
+  width: 90px;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #ececec 25%, #f7f7f7 37%, #ececec 63%);
+  background-size: 300% 100%;
+  animation: handSkeletonPulse 1.2s ease-in-out infinite;
+}
+
+.handResyncMessage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a5568;
+  background: rgba(255, 255, 255, 0.62);
+  border-radius: 10px;
+}
+
 .cardToken + .cardToken {
   margin-left: -30px; /* gap は負値不可なので重ねる場合は負のマージンで調整 */
 }
@@ -362,6 +397,15 @@
 .emptyHand {
   color: #a0aec0;
   font-size: 13px;
+}
+
+@keyframes handSkeletonPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
 }
 
 .mulliganRow {

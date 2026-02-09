@@ -81,6 +81,8 @@ export default function Game() {
     const [aiCardId, setAiCardId] = useState<number | null>(null)
     const [aiCardMap, setAiCardMap] = useState<Record<number, CardMeta>>({})
     const [aiCardUsed, setAiCardUsed] = useState(false)
+    const [baseHandReady, setBaseHandReady] = useState(false)
+    const [showResyncMessage, setShowResyncMessage] = useState(false)
     const [finish, setFinish] = useState<{
         results: boolean
         winner: string | undefined
@@ -106,6 +108,8 @@ export default function Game() {
     const [damagePopup, setDamagePopup] = useState<{ target?: string | null; amount: number } | null>(null)
     const replayTimerRef = useRef<number | null>(null)
     const damageTimerRef = useRef<number | null>(null)
+    const handWaitTimerRef = useRef<number | null>(null)
+    const resultDelayTimerRef = useRef<number | null>(null)
     // 手札引き直し関係
     // const allDefenseHand = hand.length === 3 && hand.every(cardId => CARD_LIBRARY[cardId]?.category === 'defense')
     // const canMulligan = canPlayAttackCard && allDefenseHand
@@ -210,7 +214,11 @@ export default function Game() {
                             round: typedMsg.round ?? 1,
                             turn: typedMsg.turn ?? ''
                         })
+                        finishRef.current = false
+                        setFinish({ results: false, winner: '' })
                         setHand([])
+                        setBaseHandReady(false)
+                        setShowResyncMessage(false)
                         setPhase('action')
                         setDefensePrompt(null)
                         setPlayView({ attacker: null, attackCardId: null, target: null, defenseCardId: null })
@@ -280,10 +288,17 @@ export default function Game() {
                         break
                     case 'game_over':
                         finishRef.current = true
-                        setFinish({
-                            results: true,
-                            winner: typedMsg.winner
-                        })
+                        if (resultDelayTimerRef.current !== null) {
+                            window.clearTimeout(resultDelayTimerRef.current)
+                        }
+                        // 最後のリプレイ/ダメージ表示を見せてから Results を出す
+                        resultDelayTimerRef.current = window.setTimeout(() => {
+                            setFinish({
+                                results: true,
+                                winner: typedMsg.winner
+                            })
+                            resultDelayTimerRef.current = null
+                        }, 1400)
                         setDefensePrompt(null)
                         break
                     case 'phase_changed':
@@ -353,9 +368,22 @@ export default function Game() {
                         {
                             const incoming = typedMsg.hand ?? []
                             if (incoming.length < 3) {
-                                setHand(incoming)
+                                setBaseHandReady(false)
+                                if (handWaitTimerRef.current === null) {
+                                    handWaitTimerRef.current = window.setTimeout(() => {
+                                        setShowResyncMessage(true)
+                                        handWaitTimerRef.current = null
+                                    }, 5000)
+                                }
                                 requestSync(3000)
                                 break
+                            }
+
+                            setBaseHandReady(true)
+                            setShowResyncMessage(false)
+                            if (handWaitTimerRef.current !== null) {
+                                window.clearTimeout(handWaitTimerRef.current)
+                                handWaitTimerRef.current = null
                             }
 
                             // 本来の3枚に、位置連動のオリジナルカード（非デッキ由来）を1枚追加表示する
@@ -401,6 +429,12 @@ export default function Game() {
             }
             if (damageTimerRef.current !== null) {
                 window.clearTimeout(damageTimerRef.current)
+            }
+            if (handWaitTimerRef.current !== null) {
+                window.clearTimeout(handWaitTimerRef.current)
+            }
+            if (resultDelayTimerRef.current !== null) {
+                window.clearTimeout(resultDelayTimerRef.current)
             }
             try { ws.close() } catch(error) { console.log(error) }
         }
@@ -628,6 +662,10 @@ export default function Game() {
     const gameToRooms = (con: boolean) => {
         if (navigatedRef.current) return
         navigatedRef.current = true
+        if (resultDelayTimerRef.current !== null) {
+            window.clearTimeout(resultDelayTimerRef.current)
+            resultDelayTimerRef.current = null
+        }
 
         setDefensePrompt(null)
         setPhase('action')
@@ -791,6 +829,19 @@ export default function Game() {
             <div className={styles.selectArea}>
                 <section className={styles.actions}>
                     <div className={styles.handCards}>
+                        {!baseHandReady ? (
+                            <div className={styles.handSkeletonWrap}>
+                                <div className={styles.handSkeletonGrid}>
+                                    {Array.from({ length: 3 }).map((_, idx) => (
+                                        <div key={idx} className={styles.handSkeletonCard} />
+                                    ))}
+                                </div>
+                                {showResyncMessage && (
+                                    <p className={styles.handResyncMessage}>再同期中…</p>
+                                )}
+                            </div>
+                        ) : (
+                            <>
                         {hand.length === 0 && <span className={styles.emptyHand}>カードなし</span>}
                         {hand.map((cardId, idx) => {
                             const meta: CardMeta | undefined = aiCardMap[cardId] ?? CARD_LIBRARY[cardId]
@@ -819,6 +870,8 @@ export default function Game() {
                                 </button>
                             )
                         })}
+                            </>
+                        )}
                     </div>
                     {/* <div className={styles.mulliganRow}>
                         <button className={styles.mulliganBtn} disabled={!canMulligan} onClick={mulligan}>
@@ -829,8 +882,8 @@ export default function Game() {
                 </section>
                 <div className={`${styles.cardButtons} ${playersToDisplay.length <= 4 ? styles.btnStyleAdjustment : ''}`}>
                     <NormalBtn 
-                        label={selectedCardIndex !== null ? '行動決定' : phase === 'defense' ? '防御しない' : 'ターンエンド'}
-                        disabled={phase === 'defense' ? !isDefenseTurn : !canPlayAttackCard}
+                        label={!baseHandReady ? '同期中...' : selectedCardIndex !== null ? '行動決定' : phase === 'defense' ? '防御しない' : 'ターンエンド'}
+                        disabled={!baseHandReady || (phase === 'defense' ? !isDefenseTurn : !canPlayAttackCard)}
                         onClick={commitAction}
                     /> 
                 </div>
