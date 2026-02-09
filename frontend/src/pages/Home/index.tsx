@@ -15,7 +15,7 @@ export default function Home() {
                     <p className={styles.kicker}>登録不要・無料・ブラウザで即対戦</p>
 
                     <h1 className={styles.h1}>
-                        待ち時間を遊び時間に変える、友達とできる対戦カードゲーム
+                        待ち時間が、そのままバトルフィールドになる。近くのスポットをもとにAIが必殺技カードを生成。友達とすぐ対戦できる新感覚カードゲーム。
                     </h1>
 
                     <p className={styles.lead}>
