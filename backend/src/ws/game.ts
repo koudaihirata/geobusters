@@ -104,7 +104,7 @@ export class GameEngine {
 
     buildDeck() {
         // === デッキ一覧 ===
-        const ids = DEFAULT_DECK_IDS
+        const ids = [...DEFAULT_DECK_IDS]
         for (let i = ids.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1))
             ;[ids[i], ids[j]] = [ids[j], ids[i]]
@@ -536,30 +536,37 @@ export class GameEngine {
             return
         }
 
-        const nextInfo = this.advanceTurnInfoWithStatus(deps, pending.attacker)
-        if (nextInfo === 'game_over') return 'game_over'
+        // played の共通送信（HP減少の確定を全クライアントに先に反映させる）
+        const broadcastPlayed = (next: { round: number; turn: string }) => {
+            deps.broadcast({
+                type:'played',
+                by: pending.attacker,
+                cardId: pending.cardId,
+                target: pending.target,
+                delta:{ hp: delta },
+                status: this.statusSnapshot(),
+                next,
+                defense: {
+                    by: pending.target,
+                    blocked,
+                    cardId: pending.lastDefenseCardId,
+                    cards: pending.cardsUsed
+                }
+            })
+        }
 
-        deps.broadcast({
-            type:'played',
-            by: pending.attacker,
-            cardId: pending.cardId,
-            target: pending.target,
-            delta:{ hp: delta },
-            status: this.statusSnapshot(),
-            next: nextInfo,
-            defense: {
-                by: pending.target,
-                blocked,
-                cardId: pending.lastDefenseCardId,
-                cards: pending.cardsUsed
-            }
-        })
-
+        // 最後の1人が確定した場合でも、先に played を送って HP を反映してから game_over を送る
         if (alive.length === 1) {
+            broadcastPlayed({ round: this.state.round, turn: this.currentTurnName() })
             deps.broadcast({ type:'game_over', winner: alive[0] })
             this.state.started = false
             return 'game_over'
         }
+
+        const nextInfo = this.advanceTurnInfoWithStatus(deps, pending.attacker)
+        if (nextInfo === 'game_over') return 'game_over'
+
+        broadcastPlayed(nextInfo)
     }
 
     private advanceTurnInfoWithStatus(deps: GameDeps, actor: string): { round: number; turn: string } | 'game_over' {
