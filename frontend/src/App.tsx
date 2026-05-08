@@ -5,8 +5,8 @@ import './App.css'
 import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from 'react-router-dom'
 import Home from './pages/Home'
 import NotFound from './pages/NotFound'
-import Game from './pages/Game'
-import Rooms from './pages/Rooms'
+// import Game from './pages/Game'
+// import Rooms from './pages/Rooms'
 
 const router = createBrowserRouter(
   createRoutesFromElements(
